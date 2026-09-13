@@ -2,7 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import * as DocumentPicker from 'expo-document-picker';
 import * as ImagePicker from 'expo-image-picker';
-import { useState } from 'react';
+import { useLayoutEffect, useState } from 'react';
 import { Alert, Image, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { ScreenContainer } from '../../../components/ScreenContainer';
@@ -18,9 +18,13 @@ type PickedFile = { uri: string; name: string; kind: 'photo' | 'document' };
 // Submitting is still a dead end — there's no evidence-upload endpoint to
 // send it to yet — so the picked file just sits in local state with an
 // honest "not connected yet" submit button, rather than pretending it saved.
-export function EvidenceUploadScreen({ route }: Props) {
+export function EvidenceUploadScreen({ navigation, route }: Props) {
   const { pathwayType } = route.params;
   const [picked, setPicked] = useState<PickedFile | null>(null);
+
+  useLayoutEffect(() => {
+    navigation.setOptions({ title: pathwayType });
+  }, [navigation, pathwayType]);
 
   async function takePhoto() {
     const permission = await ImagePicker.requestCameraPermissionsAsync();
@@ -58,7 +62,6 @@ export function EvidenceUploadScreen({ route }: Props) {
 
   return (
     <ScreenContainer>
-      <Text style={styles.pathway}>{pathwayType}</Text>
       <Text style={styles.subtitle}>Take a photo, or choose a photo or document from your device.</Text>
 
       <View style={styles.actions}>
@@ -106,8 +109,7 @@ export function EvidenceUploadScreen({ route }: Props) {
 }
 
 const styles = StyleSheet.create({
-  pathway: { color: colors.textPrimary, fontSize: 22, fontWeight: '800' },
-  subtitle: { color: colors.textSecondary, fontSize: 14, lineHeight: 21, marginTop: 8 },
+  subtitle: { color: colors.textSecondary, fontSize: 14, lineHeight: 21 },
   actions: { flexDirection: 'row', gap: 10, marginTop: 24 },
   actionButton: {
     alignItems: 'center',
