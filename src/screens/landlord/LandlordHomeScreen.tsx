@@ -20,6 +20,12 @@ export function LandlordHomeScreen({ navigation }: Props) {
   const { status } = useLandlordVerification();
   const parentNav = navigation.getParent<BottomTabNavigationProp<LandlordTabParamList>>();
 
+  // No properties/applicants API yet, so these are always 0 for now — but
+  // the header action (Manage/Review) is already wired to hide whenever
+  // there's nothing to act on, not just while it's unconnected.
+  const propertyCount = 0;
+  const applicantCount = 0;
+
   return (
     <ScreenContainer>
       <Text style={styles.greeting}>
@@ -47,7 +53,7 @@ export function LandlordHomeScreen({ navigation }: Props) {
         <Card style={styles.card}>
           <View style={styles.cardHeader}>
             <Text style={styles.cardTitle}>Your properties</Text>
-            <Text style={styles.cardLink}>Manage</Text>
+            {propertyCount > 0 ? <Text style={styles.cardLink}>Manage</Text> : null}
           </View>
           <Text style={styles.emptyText}>No properties yet — add one to get started.</Text>
         </Card>
@@ -57,7 +63,7 @@ export function LandlordHomeScreen({ navigation }: Props) {
         <Card style={styles.card}>
           <View style={styles.cardHeader}>
             <Text style={styles.cardTitle}>New applicants</Text>
-            <Text style={styles.cardLink}>Review</Text>
+            {applicantCount > 0 ? <Text style={styles.cardLink}>Review</Text> : null}
           </View>
           <Text style={styles.emptyText}>No new applicants right now.</Text>
         </Card>
