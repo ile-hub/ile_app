@@ -1,4 +1,4 @@
-import type { Session } from '@supabase/supabase-js';
+import type { Session, User } from '@supabase/supabase-js';
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 
 import { getSelfServeRole, type SelfServeRole } from '../lib/auth';
@@ -7,6 +7,8 @@ import { supabase } from '../lib/supabase';
 type AuthContextValue = {
   isLoading: boolean;
   role: SelfServeRole | null;
+  user: User | null;
+  displayName: string | null;
   signOut: () => Promise<void>;
 };
 
@@ -19,6 +21,7 @@ function roleFromSession(session: Session | null) {
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
   const [role, setRole] = useState<SelfServeRole | null>(null);
+  const [user, setUser] = useState<User | null>(null);
 
   useEffect(() => {
     let isMounted = true;
@@ -26,12 +29,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     supabase.auth.getSession().then(({ data }) => {
       if (isMounted) {
         setRole(roleFromSession(data.session));
+        setUser(data.session?.user ?? null);
         setIsLoading(false);
       }
     });
 
     const { data: subscription } = supabase.auth.onAuthStateChange((_event, session) => {
       setRole(roleFromSession(session));
+      setUser(session?.user ?? null);
       setIsLoading(false);
     });
 
@@ -45,12 +50,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     () => ({
       isLoading,
       role,
+      user,
+      displayName: (user?.user_metadata.display_name as string | undefined) ?? null,
       signOut: async () => {
         const { error } = await supabase.auth.signOut();
         if (error) throw error;
       },
     }),
-    [isLoading, role],
+    [isLoading, role, user],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

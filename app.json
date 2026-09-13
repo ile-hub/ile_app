@@ -22,7 +22,14 @@
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
-      "expo-secure-store"
+      "expo-secure-store",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Ilé uses your photos to attach evidence to your trust file.",
+          "cameraPermission": "Ilé uses your camera to capture evidence for your trust file."
+        }
+      ]
     ]
   }
 }
