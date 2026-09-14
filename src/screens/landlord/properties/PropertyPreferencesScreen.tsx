@@ -2,7 +2,6 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { FormInput } from '../../../components/FormInput';
 import { ScreenContainer } from '../../../components/ScreenContainer';
 import type { LandlordPropertiesStackParamList } from '../../../navigation/landlord/LandlordPropertiesStack';
 import { colors } from '../../../theme/colors';
@@ -12,8 +11,11 @@ type Props = NativeStackScreenProps<LandlordPropertiesStackParamList, 'PropertyP
 const HOUSEHOLD_TYPES = ['Single', 'Couple', 'Family', 'Sharers'] as const;
 const TENANCY_LENGTHS = ['6 months', '12 months', '18+ months'] as const;
 
-// Per-property preferences (maps to landlord_preferences.property_id
-// server-side, once that exists). Editable locally; not synced yet.
+// Per-property matching preferences (maps to landlord_preferences.property_id
+// server-side, once that exists) — who's a good fit, not the property's own
+// rules (those live as structured chips on AddEditPropertyScreen, since
+// they're an attribute of the listing itself, not a matching filter).
+// Editable locally; not synced yet.
 export function PropertyPreferencesScreen({ route }: Props) {
   void route.params.propertyId;
   const [householdType, setHouseholdType] = useState<(typeof HOUSEHOLD_TYPES)[number] | null>(
@@ -22,7 +24,6 @@ export function PropertyPreferencesScreen({ route }: Props) {
   const [tenancyLength, setTenancyLength] = useState<(typeof TENANCY_LENGTHS)[number] | null>(
     null,
   );
-  const [rules, setRules] = useState('');
 
   return (
     <ScreenContainer>
@@ -56,17 +57,6 @@ export function PropertyPreferencesScreen({ route }: Props) {
         ))}
       </View>
 
-      <View style={styles.spacer} />
-      <FormInput
-        label="Property rules"
-        multiline
-        numberOfLines={4}
-        onChangeText={setRules}
-        placeholder="e.g. No smoking, no pets"
-        style={styles.rulesInput}
-        value={rules}
-      />
-
       <Pressable style={styles.saveButton}>
         <Text style={styles.saveButtonText}>Save</Text>
       </Pressable>
@@ -99,8 +89,6 @@ const styles = StyleSheet.create({
   chipSelected: { backgroundColor: colors.accent, borderColor: colors.accent },
   chipText: { color: colors.textPrimary, fontSize: 13, fontWeight: '600' },
   chipTextSelected: { color: colors.surface },
-  spacer: { height: 20 },
-  rulesInput: { minHeight: 100, textAlignVertical: 'top' },
   saveButton: {
     alignItems: 'center',
     backgroundColor: colors.accent,

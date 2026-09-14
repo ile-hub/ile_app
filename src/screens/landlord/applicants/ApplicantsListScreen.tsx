@@ -4,7 +4,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Card } from '../../../components/Card';
 import { EmptyState } from '../../../components/EmptyState';
-import { ScreenContainer } from '../../../components/ScreenContainer';
+import { ListScreenContainer } from '../../../components/ListScreenContainer';
 import type { LandlordApplicantsStackParamList } from '../../../navigation/landlord/LandlordApplicantsStack';
 import { colors } from '../../../theme/colors';
 
@@ -31,7 +31,10 @@ const INITIAL_APPLICANTS: Applicant[] = [];
 // name, property, and compatibility here — trust profile detail lives on
 // ApplicantDetailScreen. Sorted oldest-applied-first among still-pending
 // applicants, so nobody waits longer than necessary; once shortlisted or
-// rejected, an applicant drops out of this queue.
+// rejected, an applicant drops out of this queue. Uses ListScreenContainer
+// (FlatList) since this is an open-ended list once real data exists — the
+// filter chips ride along as ListHeaderComponent so they scroll with the
+// list rather than sitting in a separate ScrollView.
 export function ApplicantsListScreen({ navigation }: Props) {
   const [applicants, setApplicants] = useState(INITIAL_APPLICANTS);
   const [propertyFilter, setPropertyFilter] = useState<'all' | string>('all');
@@ -58,73 +61,77 @@ export function ApplicantsListScreen({ navigation }: Props) {
   }
 
   return (
-    <ScreenContainer>
-      <View style={styles.chipRow}>
-        <Pressable
-          onPress={() => setPropertyFilter('all')}
-          style={[styles.chip, propertyFilter === 'all' && styles.chipSelected]}
-        >
-          <Text style={[styles.chipText, propertyFilter === 'all' && styles.chipTextSelected]}>
-            All properties
-          </Text>
-        </Pressable>
-        {properties.map((property) => (
-          <Pressable
-            key={property.id}
-            onPress={() => setPropertyFilter(property.id)}
-            style={[styles.chip, propertyFilter === property.id && styles.chipSelected]}
-          >
-            <Text
-              style={[styles.chipText, propertyFilter === property.id && styles.chipTextSelected]}
-            >
-              {property.name}
-            </Text>
-          </Pressable>
-        ))}
-      </View>
-
-      {visibleApplicants.length === 0 ? (
+    <ListScreenContainer<Applicant>
+      ListEmptyComponent={
         <EmptyState
           icon="people-outline"
           subtitle="Applicants to any of your properties will show up here, oldest application first, with their compatibility score."
           title="No applicants yet"
         />
-      ) : (
-        visibleApplicants.map((applicant) => (
+      }
+      ListHeaderComponent={
+        <View style={styles.chipRow}>
           <Pressable
-            key={applicant.id}
-            onPress={() => navigation.navigate('ApplicantDetail', { applicantId: applicant.id })}
+            onPress={() => setPropertyFilter('all')}
+            style={[styles.chip, propertyFilter === 'all' && styles.chipSelected]}
           >
-            <Card style={styles.card}>
-              <View style={styles.cardHeader}>
-                <View>
-                  <Text style={styles.name}>{applicant.name}</Text>
-                  <Text style={styles.property}>{applicant.propertyName}</Text>
-                </View>
-                <View style={styles.compatibility}>
-                  <Text style={styles.compatibilityValue}>{applicant.compatibilityPercent}%</Text>
-                  <Text style={styles.compatibilityLabel}>Compatible</Text>
-                </View>
-              </View>
-              <View style={styles.actions}>
-                <Pressable
-                  onPress={() => decide(applicant.id, 'rejected')}
-                  style={styles.rejectButton}
-                >
-                  <Text style={styles.rejectButtonText}>Not a fit</Text>
-                </Pressable>
-                <Pressable
-                  onPress={() => decide(applicant.id, 'shortlisted')}
-                  style={styles.shortlistButton}
-                >
-                  <Text style={styles.shortlistButtonText}>Shortlist</Text>
-                </Pressable>
-              </View>
-            </Card>
+            <Text style={[styles.chipText, propertyFilter === 'all' && styles.chipTextSelected]}>
+              All properties
+            </Text>
           </Pressable>
-        ))
+          {properties.map((property) => (
+            <Pressable
+              key={property.id}
+              onPress={() => setPropertyFilter(property.id)}
+              style={[styles.chip, propertyFilter === property.id && styles.chipSelected]}
+            >
+              <Text
+                style={[
+                  styles.chipText,
+                  propertyFilter === property.id && styles.chipTextSelected,
+                ]}
+              >
+                {property.name}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
+      }
+      data={visibleApplicants}
+      keyExtractor={(applicant) => applicant.id}
+      renderItem={({ item: applicant }) => (
+        <Pressable
+          onPress={() => navigation.navigate('ApplicantDetail', { applicantId: applicant.id })}
+        >
+          <Card style={styles.card}>
+            <View style={styles.cardHeader}>
+              <View>
+                <Text style={styles.name}>{applicant.name}</Text>
+                <Text style={styles.property}>{applicant.propertyName}</Text>
+              </View>
+              <View style={styles.compatibility}>
+                <Text style={styles.compatibilityValue}>{applicant.compatibilityPercent}%</Text>
+                <Text style={styles.compatibilityLabel}>Compatible</Text>
+              </View>
+            </View>
+            <View style={styles.actions}>
+              <Pressable
+                onPress={() => decide(applicant.id, 'rejected')}
+                style={styles.rejectButton}
+              >
+                <Text style={styles.rejectButtonText}>Not a fit</Text>
+              </Pressable>
+              <Pressable
+                onPress={() => decide(applicant.id, 'shortlisted')}
+                style={styles.shortlistButton}
+              >
+                <Text style={styles.shortlistButtonText}>Shortlist</Text>
+              </Pressable>
+            </View>
+          </Card>
+        </Pressable>
       )}
-    </ScreenContainer>
+    />
   );
 }
 

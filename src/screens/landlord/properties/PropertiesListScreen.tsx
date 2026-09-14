@@ -4,15 +4,20 @@ import { useLayoutEffect } from 'react';
 import { Pressable } from 'react-native';
 
 import { EmptyState } from '../../../components/EmptyState';
-import { ScreenContainer } from '../../../components/ScreenContainer';
+import { ListScreenContainer } from '../../../components/ListScreenContainer';
 import type { LandlordPropertiesStackParamList } from '../../../navigation/landlord/LandlordPropertiesStack';
 import { colors } from '../../../theme/colors';
 
 type Props = NativeStackScreenProps<LandlordPropertiesStackParamList, 'PropertiesList'>;
 
+// Placeholder shape for a property row, once there's a properties API to
+// back it.
+type PropertySummary = { id: string };
+
 // No properties API exists yet, so this is the real empty state — but the
 // "+" to add one is real navigation, ready for whenever listing a property
-// actually persists somewhere.
+// actually persists somewhere. Uses ListScreenContainer (FlatList) since
+// this is an open-ended list once real data exists.
 export function PropertiesListScreen({ navigation }: Props) {
   useLayoutEffect(() => {
     navigation.setOptions({
@@ -29,12 +34,19 @@ export function PropertiesListScreen({ navigation }: Props) {
   }, [navigation]);
 
   return (
-    <ScreenContainer>
-      <EmptyState
-        icon="business-outline"
-        subtitle="Add your first property to start managing it and reviewing applicants."
-        title="No properties yet"
-      />
-    </ScreenContainer>
+    <ListScreenContainer<PropertySummary>
+      ListEmptyComponent={
+        <EmptyState
+          actionLabel="Add a property"
+          icon="business-outline"
+          onAction={() => navigation.navigate('AddEditProperty', {})}
+          subtitle="Add your first one to start receiving applicants."
+          title="No properties yet"
+        />
+      }
+      data={[]}
+      keyExtractor={(item) => item.id}
+      renderItem={() => null}
+    />
   );
 }
