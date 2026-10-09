@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "Ilé",
+    "name": "Leri",
     "slug": "ile-app",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -26,8 +26,8 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "Ilé uses your photos to attach evidence to your trust file.",
-          "cameraPermission": "Ilé uses your camera to capture evidence for your trust file."
+          "photosPermission": "Leri uses your photos to attach evidence to your trust file.",
+          "cameraPermission": "Leri uses your camera to capture evidence for your trust file."
         }
       ]
     ]
