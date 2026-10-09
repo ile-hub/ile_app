@@ -5,24 +5,48 @@ import { Card } from '../../../components/Card';
 import { ScreenContainer } from '../../../components/ScreenContainer';
 import { TRUST_PILLARS } from '../../../lib/trustPillars';
 import type { LandlordApplicantsStackParamList } from '../../../navigation/landlord/LandlordApplicantsStack';
+import { useLandlordApplicants } from '../../../state/LandlordApplicantsProvider';
 import { colors } from '../../../theme/colors';
 
 type Props = NativeStackScreenProps<LandlordApplicantsStackParamList, 'ApplicantDetail'>;
 
-// Reachable once ApplicantsListScreen has real rows to tap into. Trust
-// profile and compatibility are shown together here, not as separate
-// screens, per the earlier design decision.
-export function ApplicantDetailScreen({ route }: Props) {
+// Trust profile and compatibility are shown together here, not as separate
+// screens, per the earlier design decision. Exactly two real actions —
+// "Interested" and "Not a fit" — no "shortlist"/third state; either one
+// removes this applicant from the active list and returns to it (see
+// LandlordApplicantsProvider for what each maps to once the API exists).
+export function ApplicantDetailScreen({ navigation, route }: Props) {
   const { applicantId } = route.params;
+  const { applicants, decline, expressInterest } = useLandlordApplicants();
+  const applicant = applicants.find((a) => a.id === applicantId);
+
+  function handleInterested() {
+    expressInterest(applicantId);
+    navigation.goBack();
+  }
+
+  function handleNotAFit() {
+    decline(applicantId);
+    navigation.goBack();
+  }
 
   return (
     <ScreenContainer>
       <Text style={styles.reference}>Applicant {applicantId}</Text>
-      <Text style={styles.title}>Applicant details aren't connected yet</Text>
-      <Text style={styles.subtitle}>
-        Once the applications API exists, this will show the renter's full profile alongside
-        their trust profile and compatibility with this property.
-      </Text>
+      {applicant ? (
+        <>
+          <Text style={styles.title}>{applicant.name}</Text>
+          <Text style={styles.subtitle}>{applicant.propertyName}</Text>
+        </>
+      ) : (
+        <>
+          <Text style={styles.title}>Applicant details aren't connected yet</Text>
+          <Text style={styles.subtitle}>
+            Once the applications API exists, this will show the renter's full profile alongside
+            their trust profile and compatibility with this property.
+          </Text>
+        </>
+      )}
 
       <Card style={styles.card}>
         <Text style={styles.cardTitle}>Trust profile & compatibility</Text>
@@ -35,14 +59,11 @@ export function ApplicantDetailScreen({ route }: Props) {
       </Card>
 
       <View style={styles.actions}>
-        <Pressable disabled style={[styles.actionButton, styles.actionButtonDisabled]}>
-          <Text style={styles.actionButtonText}>Shortlist</Text>
+        <Pressable onPress={handleNotAFit} style={styles.rejectButton}>
+          <Text style={styles.rejectButtonText}>Not a fit</Text>
         </Pressable>
-        <Pressable disabled style={[styles.actionButton, styles.actionButtonDisabled]}>
-          <Text style={styles.actionButtonText}>Accept</Text>
-        </Pressable>
-        <Pressable disabled style={[styles.actionButton, styles.rejectButtonDisabled]}>
-          <Text style={styles.rejectButtonText}>Reject</Text>
+        <Pressable onPress={handleInterested} style={styles.interestedButton}>
+          <Text style={styles.interestedButtonText}>Interested</Text>
         </Pressable>
       </View>
     </ScreenContainer>
@@ -65,26 +86,25 @@ const styles = StyleSheet.create({
   },
   pillarLabel: { color: colors.textPrimary, fontSize: 14 },
   pillarValue: { color: colors.textMuted, fontSize: 14, fontWeight: '700' },
-  actions: { flexDirection: 'row', gap: 8, marginTop: 24 },
-  actionButton: {
-    alignItems: 'center',
-    backgroundColor: colors.accent,
-    borderRadius: 24,
-    flex: 1,
-    justifyContent: 'center',
-    minHeight: 50,
-  },
-  actionButtonDisabled: { backgroundColor: colors.accentMuted },
-  actionButtonText: { color: colors.surface, fontSize: 14, fontWeight: '700' },
-  rejectButtonDisabled: {
+  actions: { flexDirection: 'row', gap: 10, marginTop: 24 },
+  rejectButton: {
     alignItems: 'center',
     backgroundColor: colors.surface,
     borderColor: colors.borderStrong,
+    borderRadius: 24,
     borderWidth: 1,
+    flex: 1,
+    justifyContent: 'center',
+    minHeight: 50,
+  },
+  rejectButtonText: { color: colors.textPrimary, fontSize: 14, fontWeight: '700' },
+  interestedButton: {
+    alignItems: 'center',
+    backgroundColor: colors.textPrimary,
     borderRadius: 24,
     flex: 1,
     justifyContent: 'center',
     minHeight: 50,
   },
-  rejectButtonText: { color: colors.textMuted, fontSize: 14, fontWeight: '700' },
+  interestedButtonText: { color: colors.surface, fontSize: 14, fontWeight: '700' },
 });

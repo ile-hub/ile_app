@@ -1,13 +1,5 @@
-import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { useLayoutEffect } from 'react';
-import { Pressable, StyleSheet, Text } from 'react-native';
-
 import { EmptyState } from '../../../components/EmptyState';
 import { ListScreenContainer } from '../../../components/ListScreenContainer';
-import type { RenterListingsStackParamList } from '../../../navigation/renter/RenterListingsStack';
-import { colors } from '../../../theme/colors';
-
-type Props = NativeStackScreenProps<RenterListingsStackParamList, 'ListingsMain'>;
 
 // Placeholder shape for a matched-listing row, once there's a matching API
 // to back it. Kept minimal since nothing populates it yet.
@@ -19,21 +11,12 @@ type ListingSummary = { id: string };
 // the compatibility breakdown lives on PropertyDetailScreen once a card
 // exists to tap into. Uses ListScreenContainer (FlatList) rather than
 // ScreenContainer since this is an open-ended list once real data exists.
-export function ListingsScreen({ navigation }: Props) {
-  useLayoutEffect(() => {
-    navigation.setOptions({
-      headerRight: () => (
-        <Pressable
-          accessibilityRole="button"
-          hitSlop={8}
-          onPress={() => navigation.navigate('MyApplications')}
-        >
-          <Text style={styles.headerAction}>My Applications</Text>
-        </Pressable>
-      ),
-    });
-  }, [navigation]);
-
+//
+// Tracking submitted applications separately (a "My Applications" screen)
+// was removed — the mutual-interest flow (Interested → Matched tab) already
+// covers "where do I stand with this property," and having both was two
+// places to check the same thing.
+export function ListingsScreen() {
   return (
     <ListScreenContainer<ListingSummary>
       ListEmptyComponent={
@@ -49,7 +32,3 @@ export function ListingsScreen({ navigation }: Props) {
     />
   );
 }
-
-const styles = StyleSheet.create({
-  headerAction: { color: colors.accent, fontSize: 14, fontWeight: '700' },
-});

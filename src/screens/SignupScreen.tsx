@@ -73,7 +73,7 @@ export function SignupScreen({ navigation }: Props) {
         >
           <View style={styles.brand}>
             <View style={styles.brandMark} />
-            <Text style={styles.brandName}>Ilé</Text>
+            <Text style={styles.brandName}>Leri</Text>
           </View>
 
           {/* <View style={styles.hero} accessibilityElementsHidden>
@@ -164,7 +164,7 @@ export function SignupScreen({ navigation }: Props) {
               ]}
             >
               <Text style={styles.submitText}>
-                {isSubmitting ? 'Creating your profile…' : 'Join Ilé'}
+                {isSubmitting ? 'Creating your profile…' : 'Join Leri'}
               </Text>
             </Pressable>
           </View>

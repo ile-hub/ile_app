@@ -6,37 +6,24 @@ import { Card } from '../../../components/Card';
 import { EmptyState } from '../../../components/EmptyState';
 import { ListScreenContainer } from '../../../components/ListScreenContainer';
 import type { LandlordApplicantsStackParamList } from '../../../navigation/landlord/LandlordApplicantsStack';
+import { useLandlordApplicants, type Applicant } from '../../../state/LandlordApplicantsProvider';
 import { colors } from '../../../theme/colors';
 
 type Props = NativeStackScreenProps<LandlordApplicantsStackParamList, 'ApplicantsList'>;
 
-type ApplicantStatus = 'pending' | 'shortlisted' | 'rejected';
-
-type Applicant = {
-  id: string;
-  name: string;
-  propertyId: string;
-  propertyName: string;
-  compatibilityPercent: number;
-  appliedAt: string; // ISO date
-  status: ApplicantStatus;
-};
-
-// No applicants API exists yet, so this starts empty rather than showing
-// sample rows. The list, filter, and sort logic below is real — it'll just
-// have something to do once applicants actually come in.
-const INITIAL_APPLICANTS: Applicant[] = [];
-
 // Across all properties, filterable by property. Deliberately shows only
 // name, property, and compatibility here — trust profile detail lives on
 // ApplicantDetailScreen. Sorted oldest-applied-first among still-pending
-// applicants, so nobody waits longer than necessary; once shortlisted or
-// rejected, an applicant drops out of this queue. Uses ListScreenContainer
-// (FlatList) since this is an open-ended list once real data exists — the
-// filter chips ride along as ListHeaderComponent so they scroll with the
-// list rather than sitting in a separate ScrollView.
+// applicants, so nobody waits longer than necessary. There are exactly two
+// actions — "Interested" (matches) and "Not a fit" (declines) — no
+// "shortlist" or third state; either one removes the applicant from this
+// active/pending queue immediately (matched ones move to the Matched tab,
+// declined ones just quietly disappear — see LandlordApplicantsProvider).
+// Uses ListScreenContainer (FlatList) since this is an open-ended list once
+// real data exists — the filter chips ride along as ListHeaderComponent so
+// they scroll with the list rather than sitting in a separate ScrollView.
 export function ApplicantsListScreen({ navigation }: Props) {
-  const [applicants, setApplicants] = useState(INITIAL_APPLICANTS);
+  const { applicants, decline, expressInterest } = useLandlordApplicants();
   const [propertyFilter, setPropertyFilter] = useState<'all' | string>('all');
 
   const properties = useMemo(() => {
@@ -55,10 +42,6 @@ export function ApplicantsListScreen({ navigation }: Props) {
         .sort((a, b) => new Date(a.appliedAt).getTime() - new Date(b.appliedAt).getTime()),
     [applicants, propertyFilter],
   );
-
-  function decide(id: string, status: 'shortlisted' | 'rejected') {
-    setApplicants((current) => current.map((a) => (a.id === id ? { ...a, status } : a)));
-  }
 
   return (
     <ListScreenContainer<Applicant>
@@ -115,17 +98,14 @@ export function ApplicantsListScreen({ navigation }: Props) {
               </View>
             </View>
             <View style={styles.actions}>
-              <Pressable
-                onPress={() => decide(applicant.id, 'rejected')}
-                style={styles.rejectButton}
-              >
+              <Pressable onPress={() => decline(applicant.id)} style={styles.rejectButton}>
                 <Text style={styles.rejectButtonText}>Not a fit</Text>
               </Pressable>
               <Pressable
-                onPress={() => decide(applicant.id, 'shortlisted')}
-                style={styles.shortlistButton}
+                onPress={() => expressInterest(applicant.id)}
+                style={styles.interestedButton}
               >
-                <Text style={styles.shortlistButtonText}>Shortlist</Text>
+                <Text style={styles.interestedButtonText}>Interested</Text>
               </Pressable>
             </View>
           </Card>
@@ -173,7 +153,7 @@ const styles = StyleSheet.create({
     minHeight: 46,
   },
   rejectButtonText: { color: colors.textPrimary, fontSize: 14, fontWeight: '700' },
-  shortlistButton: {
+  interestedButton: {
     alignItems: 'center',
     backgroundColor: colors.textPrimary,
     borderRadius: 22,
@@ -181,5 +161,5 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     minHeight: 46,
   },
-  shortlistButtonText: { color: colors.surface, fontSize: 14, fontWeight: '700' },
+  interestedButtonText: { color: colors.surface, fontSize: 14, fontWeight: '700' },
 });

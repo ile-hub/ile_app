@@ -5,11 +5,13 @@ import { colors } from '../../theme/colors';
 import { RenterFileStack } from './RenterFileStack';
 import { RenterHomeStack } from './RenterHomeStack';
 import { RenterListingsStack } from './RenterListingsStack';
+import { RenterMatchedStack } from './RenterMatchedStack';
 import { RenterProfileStack } from './RenterProfileStack';
 
 export type RenterTabParamList = {
   RenterHomeTab: undefined;
   RenterListingsTab: undefined;
+  RenterMatchedTab: undefined;
   RenterFileTab: undefined;
   RenterProfileTab: undefined;
 };
@@ -21,6 +23,7 @@ type IconName = keyof typeof Ionicons.glyphMap;
 const icons: Record<keyof RenterTabParamList, readonly [IconName, IconName]> = {
   RenterHomeTab: ['home', 'home-outline'],
   RenterListingsTab: ['search', 'search-outline'],
+  RenterMatchedTab: ['heart', 'heart-outline'],
   RenterFileTab: ['folder', 'folder-outline'],
   RenterProfileTab: ['person', 'person-outline'],
 };
@@ -45,6 +48,11 @@ export function RenterTabNavigator() {
         component={RenterListingsStack}
         name="RenterListingsTab"
         options={{ title: 'Listings' }}
+      />
+      <Tab.Screen
+        component={RenterMatchedStack}
+        name="RenterMatchedTab"
+        options={{ title: 'Matched' }}
       />
       <Tab.Screen component={RenterFileStack} name="RenterFileTab" options={{ title: 'My File' }} />
       <Tab.Screen

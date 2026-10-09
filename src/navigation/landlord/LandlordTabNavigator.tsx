@@ -4,6 +4,7 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { colors } from '../../theme/colors';
 import { LandlordApplicantsStack } from './LandlordApplicantsStack';
 import { LandlordHomeStack } from './LandlordHomeStack';
+import { LandlordMatchedStack } from './LandlordMatchedStack';
 import { LandlordProfileStack } from './LandlordProfileStack';
 import { LandlordPropertiesStack } from './LandlordPropertiesStack';
 
@@ -11,6 +12,7 @@ export type LandlordTabParamList = {
   LandlordHomeTab: undefined;
   LandlordPropertiesTab: undefined;
   LandlordApplicantsTab: undefined;
+  LandlordMatchedTab: undefined;
   LandlordProfileTab: undefined;
 };
 
@@ -22,6 +24,7 @@ const icons: Record<keyof LandlordTabParamList, readonly [IconName, IconName]> =
   LandlordHomeTab: ['home', 'home-outline'],
   LandlordPropertiesTab: ['business', 'business-outline'],
   LandlordApplicantsTab: ['people', 'people-outline'],
+  LandlordMatchedTab: ['heart', 'heart-outline'],
   LandlordProfileTab: ['person', 'person-outline'],
 };
 
@@ -54,6 +57,11 @@ export function LandlordTabNavigator() {
         component={LandlordApplicantsStack}
         name="LandlordApplicantsTab"
         options={{ title: 'Applicants' }}
+      />
+      <Tab.Screen
+        component={LandlordMatchedStack}
+        name="LandlordMatchedTab"
+        options={{ title: 'Matched' }}
       />
       <Tab.Screen
         component={LandlordProfileStack}

@@ -1,16 +1,14 @@
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
-import { ApplicationDetailScreen } from '../../screens/renter/listings/ApplicationDetailScreen';
+import { LandlordProfileScreen } from '../../screens/renter/listings/LandlordProfileScreen';
 import { ListingsScreen } from '../../screens/renter/listings/ListingsScreen';
-import { MyApplicationsScreen } from '../../screens/renter/listings/MyApplicationsScreen';
 import { PropertyDetailScreen } from '../../screens/renter/listings/PropertyDetailScreen';
 import { stackScreenOptions } from '../stackScreenOptions';
 
 export type RenterListingsStackParamList = {
   ListingsMain: undefined;
   PropertyDetail: { propertyId: string };
-  MyApplications: undefined;
-  ApplicationDetail: { applicationId: string };
+  LandlordProfile: { landlordId: string };
 };
 
 const Stack = createNativeStackNavigator<RenterListingsStackParamList>();
@@ -25,14 +23,9 @@ export function RenterListingsStack() {
         options={{ title: 'Property' }}
       />
       <Stack.Screen
-        component={MyApplicationsScreen}
-        name="MyApplications"
-        options={{ title: 'My Applications' }}
-      />
-      <Stack.Screen
-        component={ApplicationDetailScreen}
-        name="ApplicationDetail"
-        options={{ title: 'Application' }}
+        component={LandlordProfileScreen}
+        name="LandlordProfile"
+        options={{ title: 'Landlord' }}
       />
     </Stack.Navigator>
   );

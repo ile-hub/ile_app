@@ -71,7 +71,7 @@ export function LoginScreen({ navigation }: Props) {
         >
           <View style={styles.brand}>
             <View style={styles.brandMark} />
-            <Text style={styles.brandName}>Ilé</Text>
+            <Text style={styles.brandName}>Leri</Text>
           </View>
 
           <View style={styles.intro}>
@@ -151,7 +151,7 @@ export function LoginScreen({ navigation }: Props) {
           </View>
 
           <View style={styles.signupRow}>
-            <Text style={styles.signupPrompt}>New to Ilé? </Text>
+            <Text style={styles.signupPrompt}>New to Leri? </Text>
             <Pressable onPress={() => navigation.navigate('Signup')}>
               <Text style={styles.signupLink}>Create a profile</Text>
             </Pressable>
