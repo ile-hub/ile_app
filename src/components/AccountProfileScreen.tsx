@@ -1,6 +1,9 @@
+import { profileSummary } from '../lib/profiles';
+import { LegalPreferences } from './LegalPreferences';
+import { useProfile } from '../auth/ProfileProvider';
 import { Ionicons } from '@expo/vector-icons';
-import { useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { useState, type ReactNode } from 'react';
+import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { useAuth } from '../auth/AuthProvider';
 import { colors } from '../theme/colors';
@@ -18,11 +21,20 @@ export type ProfileMenuItem = {
 export function AccountProfileScreen({
   menuItems,
   roleLabel,
+  children,
+  focused = false,
+  flow = 'overview',
 }: {
+  children?: ReactNode;
+  focused?: boolean;
+  flow?: string;
   menuItems?: ProfileMenuItem[];
   roleLabel: string;
 }) {
-  const { displayName, signOut, user } = useAuth();
+  const { displayName: accountName, signOut, user } = useAuth();
+  const { profile, reload, isLoading } = useProfile();
+  const displayName = profileSummary(profile?.displayName ?? accountName) || 'Your profile';
+  const [settings, setSettings] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   async function handleLogout() {
@@ -34,21 +46,27 @@ export function AccountProfileScreen({
   }
 
   return (
-    <ScreenContainer>
-      <View style={styles.card}>
-        <View style={styles.avatar}>
+    <ScreenContainer resetKey={`${settings}:${flow}`} refreshing={isLoading} onRefresh={focused && flow === 'overview' ? () => { void reload(); } : undefined}>
+      {focused && flow === 'overview' ? <Pressable accessibilityRole="button" accessibilityLabel={settings ? 'Back to profile' : 'Settings'}
+        onPress={() => setSettings(!settings)} style={styles.settingsButton}>
+        <Ionicons name={settings ? 'arrow-back' : 'settings-outline'} size={22} color={colors.accent} />
+        <Text style={styles.menuLabel}>{settings ? 'Back to profile' : 'Settings'}</Text>
+      </Pressable> : null}
+      {settings ? <Text style={styles.name}>Settings</Text> : null}
+      {!focused || (!settings && flow === 'overview') ? <View style={styles.card}>
+        {profile?.photoUrl ? <Image source={{ uri: profile.photoUrl }} accessibilityLabel="Your profile photo" style={styles.avatar} /> : <View style={styles.avatar}>
           <Text style={styles.avatarInitial}>
             {(displayName ?? user?.email ?? '?').charAt(0).toUpperCase()}
           </Text>
-        </View>
+        </View>}
         <Text style={styles.name}>{displayName ?? 'Your profile'}</Text>
-        <Text style={styles.email}>{user?.email}</Text>
+        {!focused ? <Text style={styles.email}>{user?.email}</Text> : null}
         <View style={styles.roleBadge}>
           <Text style={styles.roleBadgeText}>{roleLabel}</Text>
         </View>
-      </View>
+      </View> : null}
 
-      {menuItems && menuItems.length > 0 ? (
+      {(!focused || (!settings && flow === 'overview')) && menuItems && menuItems.length > 0 ? (
         <View style={styles.menu}>
           {menuItems.map((item, index) => (
             <Pressable
@@ -68,6 +86,12 @@ export function AccountProfileScreen({
         </View>
       ) : null}
 
+      {children ? <View style={{ marginTop: 24, display: focused && settings ? 'none' : 'flex' }}>{children}</View> : null}
+
+      {!focused || settings ? <>
+      {focused ? <Text style={styles.email}>Account: {user?.email}</Text> : null}
+      <View style={{ marginTop: 24 }}><LegalPreferences /></View>
+
       {error ? <Text style={styles.error}>{error}</Text> : null}
 
       <Pressable
@@ -77,11 +101,13 @@ export function AccountProfileScreen({
       >
         <Text style={styles.logoutButtonText}>Log out</Text>
       </Pressable>
+      </> : null}
     </ScreenContainer>
   );
 }
 
 const styles = StyleSheet.create({
+  settingsButton: { flexDirection: 'row', alignItems: 'center', gap: 10, alignSelf: 'flex-end', minHeight: 48, paddingHorizontal: 16, backgroundColor: colors.surfaceSage, borderRadius: 24 },
   card: { alignItems: 'center', paddingTop: 24 },
   avatar: {
     alignItems: 'center',

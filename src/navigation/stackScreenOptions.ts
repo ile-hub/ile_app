@@ -9,4 +9,5 @@ export const stackScreenOptions: NativeStackNavigationOptions = {
   headerStyle: { backgroundColor: colors.background },
   headerTintColor: colors.textPrimary,
   headerTitleStyle: { fontWeight: '800' },
+  contentStyle: { backgroundColor: colors.background },
 };

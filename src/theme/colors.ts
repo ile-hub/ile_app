@@ -1,15 +1,17 @@
-// Shared palette, lifted from the existing Login/Signup screens so every
-// new screen matches without redefining these values locally.
+// Semantic palette from the Lérí MVP specification (page 1).
 export const colors = {
-  background: '#F9F0E8',
-  surface: '#FFFCF8',
-  border: '#DED0C5',
-  borderStrong: '#D9CCC2',
-  textPrimary: '#211B18',
-  textSecondary: '#6B5F58',
-  textMuted: '#786B63',
-  accent: '#A93B1E',
-  accentPressed: '#8D2F18',
-  accentMuted: '#E9C9BC',
-  danger: '#A73B2B',
+  background: '#FAF7EF',
+  surface: '#FFFFFF',
+  surfaceSage: '#EDF2E7',
+  border: '#D8E0D2',
+  borderStrong: '#B6C5AF',
+  textPrimary: '#183D32',
+  textSecondary: '#4F6257',
+  textMuted: '#627266',
+  accent: '#214E3D',
+  accentPressed: '#15382B',
+  accentMuted: '#DCE8D3',
+  onAccent: '#FFFFFF',
+  delight: '#F5D76E',
+  danger: '#A23732',
 };

@@ -1,65 +1,80 @@
-import { Ionicons } from '@expo/vector-icons';
+import { ErrorState, LoadingState, ContentStateView } from '../../../components/QueryState';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { useLayoutEffect } from 'react';
-import { Pressable, StyleSheet, Text } from 'react-native';
+import { useLayoutEffect, useState } from 'react';
+import { StyleSheet, Text, View } from 'react-native';
 
-import { Card } from '../../../components/Card';
+import { Button } from '../../../components/Button';
+import { FormInput } from '../../../components/FormInput';
 import { ScreenContainer } from '../../../components/ScreenContainer';
-import { EVIDENCE_PATHWAYS, TRUST_PILLARS } from '../../../lib/trustPillars';
+import { SelectionOption } from '../../../components/SelectionOption';
+import { StatusBadge } from '../../../components/StatusBadge';
+import { useEvidenceCatalogue, TRUST_PILLARS } from '../../../lib/trustPillars';
 import type { RenterFileStackParamList } from '../../../navigation/renter/RenterFileStack';
 import { colors } from '../../../theme/colors';
+import { spacing } from '../../../theme/tokens';
 
 type Props = NativeStackScreenProps<RenterFileStackParamList, 'EvidenceCategory'>;
 
 export function EvidenceCategoryScreen({ navigation, route }: Props) {
+  return <EvidenceDraft key={route.params.pillar} navigation={navigation} route={route} />;
+}
+
+function EvidenceDraft({ navigation, route }: Props) {
   const { pillar } = route.params;
+  const catalogue = useEvidenceCatalogue();
+  const options = catalogue.data?.filter((option) => option.pillar === pillar) ?? [];
   const meta = TRUST_PILLARS.find((p) => p.id === pillar);
-  const pathways = EVIDENCE_PATHWAYS[pillar];
+  const [selected, setSelected] = useState<string[]>([]);
+  const [explanation, setExplanation] = useState('');
 
   useLayoutEffect(() => {
-    navigation.setOptions({ title: meta?.label ?? 'Pillar' });
+    navigation.setOptions({ title: meta?.label ?? 'ARCS' });
   }, [navigation, meta]);
+
+  function toggle(option: string) {
+    setSelected((current) => current.includes(option)
+      ? current.filter((value) => value !== option) : [...current, option]);
+  }
 
   return (
     <ScreenContainer>
-      <Text style={styles.subtitle}>{meta?.description}</Text>
-      <Text style={styles.sectionTitle}>Available pathways</Text>
-      {pathways.map((pathwayType) => (
-        <Pressable
-          key={pathwayType}
-          onPress={() => navigation.navigate('EvidenceUpload', { pillar, pathwayType })}
-          style={({ pressed }) => pressed && styles.rowPressed}
-        >
-          <Card style={styles.card}>
-            <Text style={styles.pathwayLabel}>{pathwayType}</Text>
-            <Ionicons color={colors.textMuted} name="chevron-forward" size={18} />
-          </Card>
-        </Pressable>
-      ))}
-
-      <Text style={styles.sectionTitle}>Submitted</Text>
-      <Text style={styles.emptyText}>Nothing submitted for this pillar yet.</Text>
+      <View style={styles.content}>
+        <StatusBadge label="Unsaved draft" tone="highlight" />
+        <Text style={styles.subtitle}>{meta?.description}</Text>
+        <Text style={styles.subtitle}>
+          Choose any options that reflect your circumstances. You can choose several or skip
+          those you cannot provide. A document is optional.
+        </Text>
+        <Text style={styles.notice}>
+          The options below are loaded from the server. Evidence saving and uploads are not supported in Phase 1.
+          These choices and your explanation stay on this screen for now. They are not saved
+          to your account or shared, and reset when this screen closes.
+        </Text>
+        <FormInput label="Your explanation (optional)" multiline maxLength={2000}
+          onChangeText={setExplanation} placeholder="Add context in your own words"
+          textAlignVertical="top" value={explanation} />
+        <Text style={styles.heading}>Evidence options</Text>
+        {catalogue.isLoading ? <LoadingState /> : catalogue.error ? <ErrorState error={catalogue.error} onRetry={catalogue.reload} />
+          : !options.length ? <ContentStateView state={{ kind: 'empty', message: 'No active evidence options for this strand.' }} />
+          : options.map((option) => <SelectionOption key={option.id} label={option.label} selected={selected.includes(option.id)} onPress={() => toggle(option.id)} />)}
+        {selected.length > 0 ? (
+          <View style={styles.content}>
+            <Text style={styles.heading}>Optional supporting files</Text>
+            <Text style={styles.subtitle}>Use dummy documents only while trying the demo.</Text>
+            {options.filter((option) => selected.includes(option.id)).map((option) => (
+              <Button key={option.id} label={`Choose file: ${option.label}`} variant="secondary"
+                onPress={() => navigation.navigate('EvidenceUpload', { pillar, pathwayType: option.label })} />
+            ))}
+          </View>
+        ) : null}
+      </View>
     </ScreenContainer>
   );
 }
 
 const styles = StyleSheet.create({
-  subtitle: { color: colors.textSecondary, fontSize: 14, lineHeight: 21, marginBottom: 8 },
-  sectionTitle: {
-    color: colors.textPrimary,
-    fontSize: 13,
-    fontWeight: '700',
-    marginBottom: 10,
-    marginTop: 20,
-    textTransform: 'uppercase',
-  },
-  card: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 10,
-  },
-  rowPressed: { opacity: 0.7 },
-  pathwayLabel: { color: colors.textPrimary, fontSize: 15, fontWeight: '600' },
-  emptyText: { color: colors.textMuted, fontSize: 14 },
+  content: { gap: spacing.md },
+  subtitle: { color: colors.textSecondary, fontSize: 15, lineHeight: 23 },
+  notice: { color: colors.textSecondary, fontSize: 13, lineHeight: 20 },
+  heading: { color: colors.textPrimary, fontSize: 18, fontWeight: '700', marginTop: spacing.md },
 });

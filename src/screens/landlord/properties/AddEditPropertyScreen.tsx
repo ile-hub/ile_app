@@ -1,49 +1,170 @@
 import { Ionicons } from '@expo/vector-icons';
 import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { useState } from 'react';
+import type { Property, PropertyRule } from '@yourorg/ile-shared-types';
+import { useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { useLandlordVerification } from '../../../auth/LandlordVerificationProvider';
+import { useProfile } from '../../../auth/ProfileProvider';
 import { FormInput } from '../../../components/FormInput';
+import { ErrorState, LoadingState } from '../../../components/QueryState';
 import { ScreenContainer } from '../../../components/ScreenContainer';
+import { api, isVerificationRequired } from '../../../lib/api';
+import { PROPERTY_RULE_LABELS, PROPERTY_RULE_OPTIONS } from '../../../lib/properties';
+import { useApiQuery } from '../../../lib/useApiQuery';
 import type { LandlordPropertiesStackParamList } from '../../../navigation/landlord/LandlordPropertiesStack';
 import type { LandlordTabParamList } from '../../../navigation/landlord/LandlordTabNavigator';
 import { colors } from '../../../theme/colors';
 
 type Props = NativeStackScreenProps<LandlordPropertiesStackParamList, 'AddEditProperty'>;
 
-const RULE_OPTIONS = ['No smoking', 'No pets', 'Sharers OK'] as const;
+type Action = 'draft' | 'publish' | 'archive';
 
-function toggleRule(current: string[], rule: string): string[] {
+function toggleRule(current: PropertyRule[], rule: PropertyRule): PropertyRule[] {
   return current.includes(rule) ? current.filter((r) => r !== rule) : [...current, rule];
 }
 
-// The one screen in this pillar that actually gates on something real:
-// publishing is blocked until landlord verification is at least
-// submitted/pending (there's no automated LRS lookup for MVP — see
-// LandlordVerificationProvider — so "verified" only ever happens manually).
-// Saving as a draft is never gated, since it isn't visible to renters.
+// Create (POST /properties) or edit (PATCH /properties/:id), then optionally
+// publish (POST .../publish) or archive (POST .../archive). Saving a draft is
+// never gated, since drafts aren't visible to renters.
 //
-// Publish has three distinct visual/copy states rather than a plain
-// enabled/disabled toggle, because this is where that verification rule
-// actually becomes visible to the user instead of just an API check:
-// unverified (locked + explanation + link out), pending (locked + "this is
-// temporary" copy, no link — there's nothing to do but wait), verified
-// (a plain active button, no extra messaging).
+// The publish gate follows the API, not local state: ile-api only blocks
+// publishing when it runs with REQUIRE_VERIFICATION=true. When publish comes
+// back with that verification error, the screen switches to the existing
+// locked "verify first" state — unverified (explanation + link out) or
+// pending (wait copy, nothing to do), using the server profile status.
 export function AddEditPropertyScreen({ navigation, route }: Props) {
-  const isEditing = Boolean(route.params.propertyId);
-  const { status } = useLandlordVerification();
+  const { profile } = useProfile();
+  const verificationStatus = profile?.kind === 'landlord' ? profile.verification.registrationStatus : null;
   const parentNav = navigation.getParent<BottomTabNavigationProp<LandlordTabParamList>>();
+
+  // Set once a new property has been created here (e.g. publish was
+  // blocked after the draft saved), so later saves update it instead of
+  // creating a duplicate.
+  const [createdId, setCreatedId] = useState<string | null>(null);
+  const propertyId = route.params.propertyId ?? createdId;
+  const isEditing = Boolean(route.params.propertyId);
+
+  const existing = useApiQuery<Property | null>(`properties/${route.params.propertyId ?? 'new'}`, () =>
+    route.params.propertyId ? api.getProperty(route.params.propertyId) : Promise.resolve(null),
+  );
 
   const [addressLine1, setAddressLine1] = useState('');
   const [city, setCity] = useState('');
   const [postcode, setPostcode] = useState('');
   const [bedrooms, setBedrooms] = useState(1);
   const [rent, setRent] = useState('');
-  const [rules, setRules] = useState<string[]>([]);
+  const [rules, setRules] = useState<PropertyRule[]>([]);
 
-  const canPublish = status === 'verified';
+  const [pending, setPending] = useState<Action | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [verificationBlocked, setVerificationBlocked] = useState(false);
+
+  // Prefill once from the loaded property — not on every refocus refetch,
+  // which would overwrite in-progress edits.
+  const prefilled = useRef(false);
+  useEffect(() => {
+    const property = existing.data;
+    if (!property || prefilled.current) return;
+    prefilled.current = true;
+    setAddressLine1(property.addressLine1);
+    setCity(property.city);
+    setPostcode(property.postcode);
+    setBedrooms(property.bedrooms);
+    setRent(String(property.rentAmount));
+    setRules(property.propertyRules);
+  }, [existing.data]);
+
+  if (isEditing && existing.isLoading) {
+    return (
+      <ScreenContainer>
+        <LoadingState />
+      </ScreenContainer>
+    );
+  }
+  if (isEditing && !existing.data) {
+    return (
+      <ScreenContainer>
+        <ErrorState
+          error={existing.error ?? new Error('Property not found.')}
+          onRetry={existing.reload}
+        />
+      </ScreenContainer>
+    );
+  }
+
+  const status = existing.data?.status ?? 'draft';
+  const canPublish = !verificationBlocked && pending === null;
+
+  function validate(): { rentAmount: number } | null {
+    const rentAmount = Number(rent.replace(/[,£\s]/g, ''));
+    if (!addressLine1.trim() || !city.trim() || !postcode.trim()) {
+      setError('Address, city and postcode are required.');
+      return null;
+    }
+    if (!Number.isFinite(rentAmount) || rentAmount <= 0) {
+      setError('Enter a monthly rent greater than 0.');
+      return null;
+    }
+    return { rentAmount };
+  }
+
+  async function save(): Promise<Property | null> {
+    const valid = validate();
+    if (!valid) return null;
+    const body = {
+      addressLine1: addressLine1.trim(),
+      city: city.trim(),
+      postcode: postcode.trim().toUpperCase(),
+      bedrooms,
+      rentAmount: valid.rentAmount,
+      propertyRules: rules,
+    };
+    const saved = propertyId
+      ? await api.updateProperty(propertyId, body)
+      : await api.createProperty(body);
+    if (!propertyId) setCreatedId(saved.id);
+    return saved;
+  }
+
+  async function run(action: Action) {
+    setError(null);
+    setPending(action);
+    try {
+      if (action === 'archive') {
+        await api.archiveProperty(propertyId!);
+      } else {
+        const saved = await save();
+        if (!saved) return;
+        if (action === 'publish') {
+          await api.publishProperty(saved.id);
+        }
+      }
+      navigation.goBack();
+    } catch (err) {
+      if (isVerificationRequired(err)) {
+        // The draft itself saved; only publishing is blocked.
+        setVerificationBlocked(true);
+      } else {
+        setError(err instanceof Error ? err.message : 'Something went wrong.');
+      }
+    } finally {
+      setPending(null);
+    }
+  }
+
+  if (status === 'archived') {
+    return (
+      <ScreenContainer>
+        <Text style={styles.title}>Edit property</Text>
+        <View style={styles.gateNotice}>
+          <Text style={styles.gateNoticeText}>
+            This listing is archived. Archived listings can’t be edited or republished.
+          </Text>
+        </View>
+      </ScreenContainer>
+    );
+  }
 
   return (
     <ScreenContainer>
@@ -107,7 +228,7 @@ export function AddEditPropertyScreen({ navigation, route }: Props) {
 
       <Text style={styles.sectionTitle}>Property rules</Text>
       <View style={styles.chipRow}>
-        {RULE_OPTIONS.map((rule) => {
+        {PROPERTY_RULE_OPTIONS.map((rule) => {
           const selected = rules.includes(rule);
           return (
             <Pressable
@@ -115,44 +236,80 @@ export function AddEditPropertyScreen({ navigation, route }: Props) {
               onPress={() => setRules((current) => toggleRule(current, rule))}
               style={[styles.chip, selected && styles.chipSelected]}
             >
-              <Text style={[styles.chipText, selected && styles.chipTextSelected]}>{rule}</Text>
+              <Text style={[styles.chipText, selected && styles.chipTextSelected]}>
+                {PROPERTY_RULE_LABELS[rule]}
+              </Text>
             </Pressable>
           );
         })}
       </View>
 
-      {status === 'unverified' ? (
+      {verificationBlocked && verificationStatus === 'pending' ? (
+        <View style={styles.gateNotice}>
+          <Text style={styles.gateNoticeText}>
+            Verification pending — you’ll be able to publish once it’s confirmed.
+          </Text>
+        </View>
+      ) : verificationBlocked ? (
         <View style={styles.gateNotice}>
           <Text style={styles.gateNoticeText}>Verify your identity to publish a live listing</Text>
           <Pressable onPress={() => parentNav?.navigate('LandlordProfileTab')}>
             <Text style={styles.gateNoticeLink}>Go to verification</Text>
           </Pressable>
         </View>
-      ) : status === 'pending' ? (
-        <View style={styles.gateNotice}>
-          <Text style={styles.gateNoticeText}>
-            Verification pending — you'll be able to publish once it's confirmed.
-          </Text>
-        </View>
       ) : null}
 
+      {error ? <Text style={styles.error}>{error}</Text> : null}
+
       <View style={styles.actions}>
-        <Pressable style={[styles.button, styles.draftButton]}>
-          <Text style={styles.draftButtonText}>Save draft</Text>
-        </Pressable>
         <Pressable
-          disabled={!canPublish}
-          style={[styles.button, styles.publishButton, !canPublish && styles.publishButtonDisabled]}
+          disabled={pending !== null}
+          onPress={() => run('draft')}
+          style={[styles.button, styles.draftButton]}
         >
-          {!canPublish ? (
-            <Ionicons color={colors.textMuted} name="lock-closed-outline" size={16} />
-          ) : null}
-          <Text style={[styles.publishButtonText, !canPublish && styles.publishButtonTextDisabled]}>
-            Publish
+          <Text style={styles.draftButtonText}>
+            {pending === 'draft' ? 'Saving…' : status === 'published' ? 'Save changes' : 'Save draft'}
           </Text>
         </Pressable>
+        {status === 'published' ? (
+          <Pressable
+            disabled={pending !== null}
+            onPress={() => run('archive')}
+            style={[styles.button, styles.draftButton]}
+          >
+            <Text style={styles.draftButtonText}>
+              {pending === 'archive' ? 'Archiving…' : 'Archive'}
+            </Text>
+          </Pressable>
+        ) : (
+          <Pressable
+            disabled={!canPublish}
+            onPress={() => run('publish')}
+            style={[
+              styles.button,
+              styles.publishButton,
+              !canPublish && styles.publishButtonDisabled,
+            ]}
+          >
+            {verificationBlocked ? (
+              <Ionicons color={colors.textMuted} name="lock-closed-outline" size={16} />
+            ) : null}
+            <Text
+              style={[styles.publishButtonText, !canPublish && styles.publishButtonTextDisabled]}
+            >
+              {pending === 'publish' ? 'Publishing…' : 'Publish'}
+            </Text>
+          </Pressable>
+        )}
       </View>
-      
+
+      {isEditing && status === 'draft' ? (
+        <Pressable disabled={pending !== null} onPress={() => run('archive')}>
+          <Text style={styles.archiveLink}>
+            {pending === 'archive' ? 'Archiving…' : 'Archive this draft'}
+          </Text>
+        </Pressable>
+      ) : null}
     </ScreenContainer>
   );
 }
@@ -182,7 +339,13 @@ const styles = StyleSheet.create({
     width: 40,
   },
   stepperButtonDisabled: { opacity: 0.4 },
-  stepperValue: { color: colors.textPrimary, fontSize: 18, fontWeight: '700', minWidth: 24, textAlign: 'center' },
+  stepperValue: {
+    color: colors.textPrimary,
+    fontSize: 18,
+    fontWeight: '700',
+    minWidth: 24,
+    textAlign: 'center',
+  },
   rentRow: { alignItems: 'flex-end', flexDirection: 'row', gap: 12, marginTop: 16 },
   rentInput: { flex: 1 },
   currencyBadge: {
@@ -215,6 +378,7 @@ const styles = StyleSheet.create({
   },
   gateNoticeText: { color: colors.textSecondary, fontSize: 13, lineHeight: 19 },
   gateNoticeLink: { color: colors.accent, fontSize: 13, fontWeight: '700', marginTop: 8 },
+  error: { color: colors.danger, fontSize: 13, marginTop: 20, textAlign: 'center' },
   actions: { flexDirection: 'row', gap: 10, marginTop: 24 },
   button: {
     alignItems: 'center',
@@ -231,5 +395,11 @@ const styles = StyleSheet.create({
   publishButtonDisabled: { backgroundColor: colors.border },
   publishButtonText: { color: colors.surface, fontSize: 15, fontWeight: '700' },
   publishButtonTextDisabled: { color: colors.textMuted },
-  
+  archiveLink: {
+    color: colors.textMuted,
+    fontSize: 13,
+    fontWeight: '700',
+    marginTop: 18,
+    textAlign: 'center',
+  },
 });

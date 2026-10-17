@@ -1,3 +1,4 @@
+import { colors } from '../theme/colors';
 import {
   Pressable,
   StyleSheet,
@@ -19,6 +20,7 @@ export function FormInput({
   label,
   onRightActionPress,
   rightActionLabel,
+  style,
   ...inputProps
 }: FormInputProps) {
   return (
@@ -35,8 +37,8 @@ export function FormInput({
         <TextInput
           {...inputProps}
           accessibilityLabel={label}
-          placeholderTextColor="#8A817A"
-          style={[styles.input, error ? styles.inputError : null]}
+          placeholderTextColor={colors.textMuted}
+          style={[styles.input, error ? styles.inputError : null, style]}
         />
       </View>
       {error ? <Text style={styles.error}>{error}</Text> : null}
@@ -47,19 +49,19 @@ export function FormInput({
 const styles = StyleSheet.create({
   field: { gap: 6 },
   labelRow: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between' },
-  label: { color: '#312823', fontSize: 13, fontWeight: '600' },
-  rightAction: { color: '#9D361A', fontSize: 13, fontWeight: '700' },
+  label: { color: colors.textPrimary, fontSize: 13, fontWeight: '600' },
+  rightAction: { color: colors.accent, fontSize: 13, fontWeight: '700' },
   input: {
-    backgroundColor: '#FFFCF8',
-    borderColor: '#CFC4BA',
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
     borderRadius: 18,
     borderWidth: 1,
-    color: '#1D1815',
+    color: colors.textPrimary,
     fontSize: 16,
     minHeight: 54,
     paddingHorizontal: 18,
     paddingVertical: 14,
   },
-  inputError: { borderColor: '#A73B2B' },
-  error: { color: '#A73B2B', fontSize: 12 },
+  inputError: { borderColor: colors.danger },
+  error: { color: colors.danger, fontSize: 12 },
 });

@@ -7,6 +7,8 @@ import { LandlordTabNavigator } from './landlord/LandlordTabNavigator';
 import { RenterTabNavigator } from './renter/RenterTabNavigator';
 import { LoginScreen } from '../screens/LoginScreen';
 import { SignupScreen } from '../screens/SignupScreen';
+import { navigationTheme } from '../theme/navigationTheme';
+import { colors } from '../theme/colors';
 
 // Login/Signup live on this root stack. Once a role is known, the whole
 // stack is swapped out for that role's own tab navigator (RenterTabNavigator
@@ -22,19 +24,19 @@ export type RootStackParamList = {
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
 export function RootNavigator() {
-  const { isLoading, role } = useAuth();
+  const { isLoading, role, user } = useAuth();
 
   if (isLoading) {
     return (
       <View style={styles.loading}>
-        <ActivityIndicator />
+        <ActivityIndicator color={colors.accent} />
       </View>
     );
   }
 
   return (
-    <NavigationContainer>
-      <Stack.Navigator screenOptions={{ headerShown: false }}>
+    <NavigationContainer theme={navigationTheme}>
+      <Stack.Navigator key={user?.id ?? 'signed-out'} screenOptions={{ headerShown: false }}>
         {role === 'renter' ? (
           <Stack.Screen component={RenterTabNavigator} name="RenterRoot" />
         ) : role === 'landlord' ? (
@@ -52,6 +54,7 @@ export function RootNavigator() {
 
 const styles = StyleSheet.create({
   loading: {
+    backgroundColor: colors.background,
     alignItems: 'center',
     flex: 1,
     justifyContent: 'center',

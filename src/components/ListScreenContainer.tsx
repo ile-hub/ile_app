@@ -5,7 +5,7 @@ import { colors } from '../theme/colors';
 
 // For screens whose content is an open-ended, potentially-long list of rows
 // — properties, listings, applicants, applications. Uses FlatList so the
-// list virtualizes once it's backed by real data, instead of ScreenContainer's
+// list virtualizes, instead of ScreenContainer's
 // ScrollView (which would nest a FlatList inside a ScrollView — React Native
 // warns against exactly that, and it breaks windowing/performance).
 //
@@ -18,6 +18,7 @@ export function ListScreenContainer<T>(props: FlatListProps<T>) {
   return (
     <SafeAreaView edges={['left', 'right', 'bottom']} style={styles.safeArea}>
       <FlatList
+        contentInsetAdjustmentBehavior="never"
         contentContainerStyle={styles.content}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
