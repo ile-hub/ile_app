@@ -241,3 +241,124 @@ test('Phase C transport follows exact message routes, cursor query and plain tex
   ]);
   for (const status of [403, 404, 409, 500]) { h.setStatus(status); await assert.rejects(h.api.sendMessage('connection', 'Kept draft'), e => e.status === status); }
 });
+
+test('landlord public presentation omits empty optional sections and never renders private fields', () => {
+  const source = fs.readFileSync(new URL('../src/screens/discover/LandlordProfileScreen.tsx', import.meta.url), 'utf8');
+  const compiled = ts.transpileModule(source, { fileName: 'LandlordProfileScreen.tsx', compilerOptions: {
+    module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX,
+  } }).outputText;
+  const exports = {};
+  const jsx = (type, props) => typeof type === 'function' ? type(props) : { type, props };
+  const element = ({ children }) => children;
+  vm.runInNewContext(compiled, { exports, require: name => {
+    if (name === 'react/jsx-runtime') return { jsx, jsxs: jsx };
+    if (name === 'react-native') return { Image: 'Image', Text: 'Text', View: 'View' };
+    if (name.endsWith('/profiles')) return { profileSummary };
+    if (name.endsWith('/trustPillars')) return { TRUST_PILLARS: [] };
+    if (name.endsWith('/StatusBadge')) return { StatusBadge: ({ label }) => label, ProfileVerification: () => 'server verification' };
+    if (name.endsWith('/ScreenContainer')) return { screenStyles: {} };
+    return { Card: element, Button: ({ label }) => label };
+  } });
+  const text = tree => tree == null ? '' : Array.isArray(tree) ? tree.map(text).join(' ') : typeof tree === 'object' ? text(tree.props?.children) : String(tree);
+  const profile = { kind: 'landlord', displayName: 'Alex', bio: '', companyName: null, landlordType: null,
+    communicationStyle: null, lettingApproach: null, tenantExpectations: null, tenancySuccess: null,
+    lettingExperienceYears: 0, numberOfProperties: 0, locationsCovered: [], properties: [],
+    verification: {}, arcsPreferences: null,
+    registrationNumbers: ['PRIVATE-REGISTRATION'], registrationDetails: 'PRIVATE-DETAILS', evidence: 'PRIVATE-EVIDENCE' };
+  const empty = text(exports.LandlordPublicProfileContent({ profile, label: 'Saved public preview' }));
+  assert.doesNotMatch(empty, /Not provided|PRIVATE-|Getting to know me|How I communicate|Request to Connect/);
+  assert.match(empty, /0\s+years/);
+  assert.match(empty, /0\s+properties/);
+  const populated = text(exports.LandlordPublicProfileContent({ profile: { ...profile, communicationStyle: 'I listen first.' } }));
+  assert.match(populated, /Getting to know me/);
+  assert.match(populated, /I listen first/);
+  assert.match(populated, /Request to Connect/);
+});
+
+test('routed landlord editors retain every field and keep registration out of About Me; renter fields remain available', () => {
+  let activeProfile;
+  const jsx = (type, props) => typeof type === 'function' ? type(props) : { type, props };
+  const compiled = ts.transpileModule(fs.readFileSync(new URL('../src/components/ProfileEditor.tsx', import.meta.url), 'utf8'), {
+    fileName: 'ProfileEditor.tsx', compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX },
+  }).outputText;
+  const exports = {};
+  const { profileFields } = loadSource('../src/lib/profiles.ts');
+  vm.runInNewContext(compiled, { exports, require: name => {
+    if (name === 'react/jsx-runtime') return { jsx, jsxs: jsx };
+    if (name === 'react') return { useState: value => [typeof value === 'function' ? value() : value, () => {}], useEffect: () => {} };
+    if (name === '@react-navigation/native') return { useNavigation: () => ({}), usePreventRemove: () => {} };
+    if (name === 'react-native') return { Image: 'Image', Text: 'Text', View: 'View' };
+    if (name.endsWith('/ProfileProvider')) return { useProfile: () => ({ profile: activeProfile }) };
+    if (name.endsWith('/profiles')) return { profileDraft, profilePatch, profileFields, profileSummary };
+    if (name.endsWith('/ScreenContainer')) return { screenStyles: {} };
+    return { FormInput: ({ label }) => ({ field: label }), Card: ({ children }) => children,
+      Button: () => null, StatusBadge: () => null, SelectionOption: () => null };
+  } });
+  const fields = tree => tree == null ? [] : Array.isArray(tree) ? tree.flatMap(fields) : typeof tree === 'object'
+    ? tree.field ? [tree.field] : fields(tree.props?.children) : [];
+  activeProfile = { kind: 'landlord', discoverable: false, landlordType: null, displayName: 'Alex' };
+  const about = fields(exports.ProfileEditor({ role: 'landlord', routed: true, initialSection: 'about' }));
+  const business = fields(exports.ProfileEditor({ role: 'landlord', routed: true, initialSection: 'business' }));
+  assert.equal(about.length + business.length, profileFields('landlord').length);
+  assert.deepEqual([...about, ...business].sort(), Array.from(profileFields('landlord'), field => field.label).sort());
+  assert.ok(business.includes('Scottish landlord registration numbers (private, one per line)'));
+  assert.ok(!about.some(label => /registration/i.test(label)));
+  activeProfile = renter;
+  const renterFields = ['about', 'housing'].flatMap(initialSection => fields(exports.ProfileEditor({ role: 'renter', routed: true, initialSection })));
+  assert.deepEqual(renterFields.sort(), Array.from(profileFields('renter'), field => field.label).sort());
+});
+
+test('both Profile homes share the grouped dashboard and retain their five existing destinations', () => {
+  const jsx = (type, props) => typeof type === 'function' ? type(props) : { type, props };
+  for (const [role, exportName, destinations] of [
+    ['renter', 'RenterProfileScreen', ['AboutMe', 'HousingPreferences', 'Evidence', 'VerificationStatus', 'PublicProfilePreview']],
+    ['landlord', 'LandlordProfileScreen', ['LandlordAbout', 'LandlordBusiness', 'LandlordArcs', 'LandlordVerification', 'LandlordPreview']],
+  ]) {
+    const exports = {};
+    const source = fs.readFileSync(new URL(`../src/screens/${role}/profile/${exportName}.tsx`, import.meta.url), 'utf8');
+    const compiled = ts.transpileModule(source, { fileName: `${exportName}.tsx`, compilerOptions: {
+      module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX,
+    } }).outputText;
+    vm.runInNewContext(compiled, { exports, require: name => {
+      if (name === 'react/jsx-runtime') return { jsx, jsxs: jsx };
+      if (name === 'react-native') return { StyleSheet: { create: value => value } };
+      if (name.endsWith('/ProfileProvider')) return { useProfile: () => ({ profile: { ...renter, kind: role } }) };
+      if (name.endsWith('/profiles')) return { profileSummary };
+      if (name.endsWith('/AccountProfileScreen')) return { AccountProfileScreen: props => props };
+      if (name.endsWith('/colors')) return { colors: {} };
+      return {};
+    } });
+    const visited = [];
+    const dashboard = exports[exportName]({ navigation: { navigate: route => visited.push(route) } });
+    assert.equal(dashboard.dashboard, true);
+    assert.equal(dashboard.focused, true);
+    assert.equal(dashboard.menuItems.length, 5);
+    assert.equal(dashboard.menuItems[4].label, 'Preview my public profile');
+    dashboard.menuItems.forEach(item => { assert.ok(item.icon && item.detail); item.onPress(); });
+    assert.deepEqual(visited, destinations);
+  }
+});
+
+test('shared Profile dashboards hide account email while Settings retains it', () => {
+  const jsx = (type, props) => typeof type === 'function' ? type(props) : { type, props };
+  const exports = {};
+  const compiled = ts.transpileModule(fs.readFileSync(new URL('../src/components/AccountProfileScreen.tsx', import.meta.url), 'utf8'), {
+    fileName: 'AccountProfileScreen.tsx', compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX },
+  }).outputText;
+  vm.runInNewContext(compiled, { exports, require: name => {
+    if (name === 'react/jsx-runtime') return { jsx, jsxs: jsx };
+    if (name === 'react') return { useState: value => [value, () => {}] };
+    if (name === 'react-native') return { Image: 'Image', Text: 'Text', View: 'View', Pressable: 'Pressable', StyleSheet: { create: value => value } };
+    if (name.endsWith('/AuthProvider')) return { useAuth: () => ({ user: { email: 'PRIVATE-ACCOUNT-EMAIL' }, displayName: 'Alex' }) };
+    if (name.endsWith('/ProfileProvider')) return { useProfile: () => ({ profile: null, isLoading: false }) };
+    if (name.endsWith('/profiles')) return { profileSummary };
+    if (name.endsWith('/ScreenContainer')) return { ScreenContainer: ({ children }) => children };
+    if (name.endsWith('/LegalPreferences')) return { LegalPreferences: () => 'Existing legal content' };
+    return { Ionicons: () => null, colors: {} };
+  } });
+  const text = tree => tree == null ? '' : Array.isArray(tree) ? tree.map(text).join(' ') : typeof tree === 'object' ? text(tree.props?.children) : String(tree);
+  for (const roleLabel of ['Renter', 'Landlord']) {
+    assert.doesNotMatch(text(exports.AccountProfileScreen({ roleLabel, focused: true, dashboard: true })), /PRIVATE-ACCOUNT-EMAIL/);
+    assert.match(text(exports.AccountProfileScreen({ roleLabel, focused: true, settingsOnly: true })), /PRIVATE-ACCOUNT-EMAIL/);
+  }
+});

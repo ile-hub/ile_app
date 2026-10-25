@@ -18,29 +18,39 @@ import type { DiscoverStackParamList } from '../../navigation/DiscoverStack';
 export function LandlordPublicProfileContent({ profile, label, properties, onRequest }: {
   profile?: PublicLandlordProfile; label?: string; properties?: ReactNode; onRequest?: () => void;
 }) {
-  const sections = [
-    ['bio', 'About'], ['companyName', 'Business name'], ['landlordType', 'Landlord type'],
-    ['communicationStyle', 'Communication style'], ['lettingApproach', 'Letting approach'],
-    ['tenantExpectations', 'What can a great tenant expect from you as a landlord?'],
-    ['tenancySuccess', 'What makes a tenancy work well for you?'],
+  // Render only the explicit public contract; private registration fields never enter these groups.
+  const story = [
+    ['communicationStyle', 'How I communicate'], ['lettingApproach', 'My letting approach'],
+    ['tenantExpectations', 'What you can expect from me'], ['tenancySuccess', 'What makes a tenancy work'],
   ] as const;
+  const storyItems = story.map(([key, title]) => ({ title, text: profileSummary(profile?.[key]) })).filter(item => item.text);
+  const bio = profileSummary(profile?.bio);
+  const company = profileSummary(profile?.companyName);
+  const hasBusiness = company || profile?.landlordType || profile?.lettingExperienceYears != null || profile?.numberOfProperties != null || !!profile?.locationsCovered.length;
   return <View style={styles.content}>
     {label || !profile ? <StatusBadge label={label ?? 'Layout only · no profile loaded'} tone="highlight" /> : null}
-    <Text style={styles.title}>{profileSummary(profile?.displayName) || 'Landlord profile'}</Text>
-    {profile?.photoUrl ? <Image source={{ uri: profile.photoUrl }} accessibilityLabel="Public landlord portrait" style={{ width: 80, height: 80, borderRadius: 40 }} /> : null}
-    {profile ? <ProfileVerification verification={profile.verification} /> : <StatusBadge label="Verification unavailable" />}
-    {sections.map(([key, title]) => <Card key={key}><Text style={styles.heading}>{title}</Text><Text style={styles.body}>{profileSummary(profile?.[key]) || 'Not provided.'}</Text></Card>)}
-    <Card><View style={styles.content}>
-      <Text style={styles.heading}>Letting experience and locations</Text>
-      <Text style={styles.body}>Experience: {profile?.lettingExperienceYears != null ? `${profile.lettingExperienceYears} years` : 'Not provided'}</Text>
-      <Text style={styles.body}>Self-declared portfolio: {profile?.numberOfProperties ?? 'Not provided'}</Text>
-      <Text style={styles.body}>Locations: {profile?.locationsCovered.join(', ') || 'Not provided'}</Text>
-    </View></Card>
-    <Card><View style={styles.content}><Text style={styles.heading}>ARCS priorities</Text>
-      {profile?.arcsPreferences ? profile.arcsPreferences.priorityOrder.map((pillar, index) => <Text key={pillar} style={styles.body}>{index + 1}. {TRUST_PILLARS.find(item => item.id === pillar)?.label}</Text>)
-        : <Text style={styles.note}>No preferences loaded.</Text>}
-      <Text style={styles.note}>Evidence preferences provide context, and never restrict who appears in discovery.</Text>
-    </View></Card>
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16 }}>
+      {profile?.photoUrl ? <Image source={{ uri: profile.photoUrl }} accessibilityLabel="Public landlord portrait" style={{ width: 72, height: 72, borderRadius: 36 }} /> : null}
+      <View style={{ flex: 1, gap: 6 }}><Text style={styles.title}>{profileSummary(profile?.displayName) || 'Landlord profile'}</Text><Text style={styles.note}>Landlord</Text></View>
+    </View>
+    {bio ? <Text style={styles.body}>{bio}</Text> : null}
+    {storyItems.length ? <Card><View style={styles.content}>
+      <Text style={styles.heading}>Getting to know me</Text>
+      {storyItems.map(item => <View key={item.title} style={{ gap: 6 }}><Text style={styles.heading}>{item.title}</Text><Text style={styles.body}>{item.text}</Text></View>)}
+    </View></Card> : null}
+    {hasBusiness ? <Card><View style={styles.content}>
+      <Text style={styles.heading}>My letting background</Text>
+      {company ? <Text style={styles.body}>{company}</Text> : null}
+      {profile?.landlordType ? <Text style={styles.body}>Landlord type: {profile.landlordType}</Text> : null}
+      {profile?.lettingExperienceYears != null ? <Text style={styles.body}>Letting experience: {profile.lettingExperienceYears} years</Text> : null}
+      {profile?.numberOfProperties != null ? <Text style={styles.body}>Self-declared portfolio: {profile.numberOfProperties} properties</Text> : null}
+      {profile?.locationsCovered.length ? <Text style={styles.body}>Locations: {profile.locationsCovered.join(', ')}</Text> : null}
+    </View></Card> : null}
+    {profile ? <Card><View style={styles.content}><Text style={styles.heading}>Verification</Text><ProfileVerification verification={profile.verification} /></View></Card> : <StatusBadge label="Verification unavailable" />}
+    {profile?.arcsPreferences ? <Card><View style={styles.content}><Text style={styles.heading}>ARCS preferences</Text>
+      {profile.arcsPreferences.priorityOrder.map((pillar, index) => <Text key={pillar} style={styles.body}>{index + 1}. {TRUST_PILLARS.find(item => item.id === pillar)?.label}</Text>)}
+      <Text style={styles.note}>These preferences provide context, not scores or eligibility requirements. They never restrict who appears in discovery.</Text>
+    </View></Card> : null}
     <Text style={styles.heading}>Available properties</Text>
     <Text style={styles.note}>Explore their available homes below. Full addresses stay private.</Text>
     {properties ?? (profile?.properties.length ? profile.properties.map(property => <Card key={property.id}>

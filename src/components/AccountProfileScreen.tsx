@@ -8,10 +8,12 @@ import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useAuth } from '../auth/AuthProvider';
 import { colors } from '../theme/colors';
 import { ScreenContainer } from './ScreenContainer';
+import { ErrorState, LoadingState } from './QueryState';
 
 export type ProfileMenuItem = {
   key: string;
   label: string;
+  detail?: string;
   icon: keyof typeof Ionicons.glyphMap;
   onPress: () => void;
 };
@@ -24,7 +26,11 @@ export function AccountProfileScreen({
   children,
   focused = false,
   flow = 'overview',
+  dashboard = false,
+  settingsOnly = false,
 }: {
+  dashboard?: boolean;
+  settingsOnly?: boolean;
   children?: ReactNode;
   focused?: boolean;
   flow?: string;
@@ -32,9 +38,10 @@ export function AccountProfileScreen({
   roleLabel: string;
 }) {
   const { displayName: accountName, signOut, user } = useAuth();
-  const { profile, reload, isLoading } = useProfile();
+  const { profile, reload, isLoading, error: profileError } = useProfile();
   const displayName = profileSummary(profile?.displayName ?? accountName) || 'Your profile';
-  const [settings, setSettings] = useState(false);
+  const [localSettings, setSettings] = useState(false);
+  const settings = settingsOnly || localSettings;
   const [error, setError] = useState<string | null>(null);
 
   async function handleLogout() {
@@ -46,50 +53,56 @@ export function AccountProfileScreen({
   }
 
   return (
-    <ScreenContainer resetKey={`${settings}:${flow}`} refreshing={isLoading} onRefresh={focused && flow === 'overview' ? () => { void reload(); } : undefined}>
-      {focused && flow === 'overview' ? <Pressable accessibilityRole="button" accessibilityLabel={settings ? 'Back to profile' : 'Settings'}
+    <ScreenContainer resetKey={`${settings}:${flow}`} refreshing={isLoading} onRefresh={!settingsOnly && !settings && focused && flow === 'overview' ? () => { void reload(); } : undefined}>
+      {!dashboard && !settingsOnly && focused && flow === 'overview' ? <Pressable accessibilityRole="button" accessibilityLabel={settings ? 'Back to profile' : 'Settings'}
         onPress={() => setSettings(!settings)} style={styles.settingsButton}>
         <Ionicons name={settings ? 'arrow-back' : 'settings-outline'} size={22} color={colors.accent} />
         <Text style={styles.menuLabel}>{settings ? 'Back to profile' : 'Settings'}</Text>
       </Pressable> : null}
-      {settings ? <Text style={styles.name}>Settings</Text> : null}
-      {!focused || (!settings && flow === 'overview') ? <View style={styles.card}>
-        {profile?.photoUrl ? <Image source={{ uri: profile.photoUrl }} accessibilityLabel="Your profile photo" style={styles.avatar} /> : <View style={styles.avatar}>
+      {settings && !settingsOnly ? <Text style={styles.name}>Settings</Text> : null}
+      {!settingsOnly && (!focused || (!settings && flow === 'overview')) ? <View style={[styles.card, dashboard && styles.dashboardIdentity]}>
+        {profile?.photoUrl ? <Image source={{ uri: profile.photoUrl }} accessibilityLabel="Your profile photo" style={[styles.avatar, dashboard && styles.dashboardAvatar]} /> : <View style={[styles.avatar, dashboard && styles.dashboardAvatar]}>
           <Text style={styles.avatarInitial}>
             {(displayName ?? user?.email ?? '?').charAt(0).toUpperCase()}
           </Text>
         </View>}
-        <Text style={styles.name}>{displayName ?? 'Your profile'}</Text>
-        {!focused ? <Text style={styles.email}>{user?.email}</Text> : null}
-        <View style={styles.roleBadge}>
+        <Text style={[styles.name, dashboard && styles.dashboardName]}>{displayName ?? 'Your profile'}</Text>
+        {!focused && !dashboard ? <Text style={styles.email}>{user?.email}</Text> : null}
+        <View style={[styles.roleBadge, dashboard && styles.dashboardRole]}>
           <Text style={styles.roleBadgeText}>{roleLabel}</Text>
         </View>
       </View> : null}
 
+      {dashboard && isLoading && !profile ? <LoadingState /> : null}
+      {dashboard && profileError ? <ErrorState error={profileError} onRetry={reload} /> : null}
+
       {(!focused || (!settings && flow === 'overview')) && menuItems && menuItems.length > 0 ? (
-        <View style={styles.menu}>
+        <View style={[styles.menu, dashboard && styles.dashboardMenu]}>
           {menuItems.map((item, index) => (
             <Pressable
               key={item.key}
+              accessibilityRole="button"
+              accessibilityLabel={item.label}
               onPress={item.onPress}
               style={({ pressed }) => [
                 styles.menuRow,
+                dashboard && styles.dashboardRow,
                 index === 0 && styles.menuRowFirst,
                 pressed && styles.menuRowPressed,
               ]}
             >
               <Ionicons color={colors.accent} name={item.icon} size={20} />
-              <Text style={styles.menuLabel}>{item.label}</Text>
+              <View style={styles.menuText}><Text style={[styles.menuLabel, { flex: 0 }]}>{item.label}</Text>{item.detail ? <Text numberOfLines={2} style={styles.menuDetail}>{item.detail}</Text> : null}</View>
               <Ionicons color={colors.textMuted} name="chevron-forward" size={18} />
             </Pressable>
           ))}
         </View>
       ) : null}
 
-      {children ? <View style={{ marginTop: 24, display: focused && settings ? 'none' : 'flex' }}>{children}</View> : null}
+      {children ? <View style={{ marginTop: 24, display: (focused || settingsOnly) && settings ? 'none' : 'flex' }}>{children}</View> : null}
 
       {!focused || settings ? <>
-      {focused ? <Text style={styles.email}>Account: {user?.email}</Text> : null}
+      {focused || settingsOnly ? <Text style={styles.email}>Account: {user?.email}</Text> : null}
       <View style={{ marginTop: 24 }}><LegalPreferences /></View>
 
       {error ? <Text style={styles.error}>{error}</Text> : null}
@@ -107,6 +120,14 @@ export function AccountProfileScreen({
 }
 
 const styles = StyleSheet.create({
+  dashboardIdentity: { paddingTop: 0 },
+  dashboardAvatar: { width: 72, height: 72, borderRadius: 36 },
+  dashboardName: { marginTop: 10, textAlign: 'center' },
+  dashboardRole: { marginTop: 8, paddingVertical: 4 },
+  dashboardMenu: { marginTop: 20, overflow: 'hidden' },
+  dashboardRow: { minHeight: 84, paddingVertical: 12 },
+  menuText: { flex: 1, gap: 4 },
+  menuDetail: { color: colors.textSecondary, fontSize: 13, lineHeight: 19 },
   settingsButton: { flexDirection: 'row', alignItems: 'center', gap: 10, alignSelf: 'flex-end', minHeight: 48, paddingHorizontal: 16, backgroundColor: colors.surfaceSage, borderRadius: 24 },
   card: { alignItems: 'center', paddingTop: 24 },
   avatar: {

@@ -1,5 +1,6 @@
-import { useState } from 'react';
-import { Image, Text, View } from 'react-native';
+import { useEffect, useState } from 'react';
+import { useNavigation, usePreventRemove } from '@react-navigation/native';
+import { Alert, Image, Text, View } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { useProfile } from '../auth/ProfileProvider';
 import { api } from '../lib/api';
@@ -17,15 +18,16 @@ import { StatusBadge, ProfileVerification } from './StatusBadge';
 import { RenterPublicProfileContent } from '../screens/discover/RenterPublicProfileScreen';
 import { LandlordPublicProfileContent } from '../screens/discover/LandlordProfileScreen';
 
-export function ProfileEditor({ role, onSectionChange }: { role: SelfServeRole; onSectionChange?: (section: string) => void }) {
+export type ProfileSection = 'overview' | 'about' | 'housing' | 'story' | 'preview' | 'business';
+export function ProfileEditor({ role, onSectionChange, initialSection, routed = false }: { role: SelfServeRole; onSectionChange?: (section: string) => void; initialSection?: ProfileSection; routed?: boolean }) {
   const { profile, isLoading, error, reload } = useProfile();
   if (!profile) return isLoading ? <LoadingState /> : <ErrorState error={error ?? new Error('Your profile is unavailable.')} onRetry={reload} />;
   if (profile.kind !== role) return <Text style={styles.body}>This account profile does not match the active role.</Text>;
-  return <ProfileForm profile={profile} onSectionChange={onSectionChange} />;
+  return <ProfileForm profile={profile} onSectionChange={onSectionChange} initialSection={initialSection} routed={routed} />;
 }
-function ProfileForm({ profile, onSectionChange }: { profile: OwnProfile; onSectionChange?: (section: string) => void }) {
+function ProfileForm({ profile, onSectionChange, initialSection, routed }: { profile: OwnProfile; onSectionChange?: (section: string) => void; initialSection?: ProfileSection; routed: boolean }) {
   const { save, reload, error: loadError } = useProfile();
-  const [section, setSection] = useState<'overview' | 'about' | 'housing' | 'story' | 'preview'>(profile.kind === 'renter' ? 'overview' : 'about');
+  const [section, setSection] = useState<ProfileSection>(initialSection ?? (profile.kind === 'renter' ? 'overview' : 'about'));
   function navigateSection(next: typeof section) { if (section === 'overview') hydrate(profile); setSection(next); onSectionChange?.(next); }
   const [base, setBase] = useState(profile);
   const [draft, setDraft] = useState(() => profileDraft(profile));
@@ -48,6 +50,15 @@ function ProfileForm({ profile, onSectionChange }: { profile: OwnProfile; onSect
   }
   const dirty = JSON.stringify(draft) !== JSON.stringify(profileDraft(base)) || discoverable !== base.discoverable ||
     (base.kind === 'renter' ? householdType !== base.householdType || JSON.stringify(preferences) !== JSON.stringify(base.householdPreferences) : landlordType !== base.landlordType);
+  const navigation = useNavigation();
+  usePreventRemove(routed && (dirty || busy), ({ data }) => {
+    if (busy) { Alert.alert('Saving profile', 'Please wait for your changes to finish saving.'); return; }
+    Alert.alert('Discard unsaved changes?', 'Your saved profile will stay unchanged.', [
+      { text: 'Keep editing', style: 'cancel' },
+      { text: 'Discard changes', style: 'destructive', onPress: () => navigation.dispatch(data.action) },
+    ]);
+  });
+  useEffect(() => { if (initialSection === 'preview') void loadPreview(); }, [initialSection]);
   async function reloadForm() {
     if (dirty || busy) return;
     setBusy(true);
@@ -87,7 +98,8 @@ function ProfileForm({ profile, onSectionChange }: { profile: OwnProfile; onSect
   }
   const renter = base.kind === 'renter';
   const aboutKeys = ['displayName', 'bio', 'photoUrl', 'currentLocation'];
-  const visibleFields = profileFields(base.kind).filter((field) => !renter || (section === 'about' ? aboutKeys.includes(field.key)
+  const landlordAboutKeys = ['displayName', 'bio', 'photoUrl', 'communicationStyle', 'lettingApproach', 'tenantExpectations', 'tenancySuccess'];
+  const visibleFields = profileFields(base.kind).filter((field) => !renter ? !routed || (section === 'about' ? landlordAboutKeys.includes(field.key) : !landlordAboutKeys.includes(field.key)) : (section === 'about' ? aboutKeys.includes(field.key) || (routed && field.key === 'personalStory')
     : section === 'story' ? field.key === 'personalStory' : !aboutKeys.includes(field.key) && field.key !== 'personalStory'));
   if (renter && section === 'overview') return <View style={styles.content}>
     <Text style={styles.body}>{profileSummary(profile.bio) || 'Tell people a little about yourself and the home you’re looking for.'}</Text>
@@ -104,21 +116,25 @@ function ProfileForm({ profile, onSectionChange }: { profile: OwnProfile; onSect
     <Button label="Preview Public Profile" variant="secondary" onPress={() => { navigateSection('preview'); void loadPreview(); }} />
     {loadError ? <ErrorState error={loadError} onRetry={reload} /> : null}
   </View>;
-  if (renter && section === 'preview') return <View style={styles.content}>
-    <Button label="Back to profile" variant="secondary" onPress={() => navigateSection('overview')} />
-    <Text style={styles.heading}>Your public profile</Text>
+  if (section === 'preview') return <View style={styles.content}>
+    {!routed ? <Button label="Back to profile" variant="secondary" onPress={() => navigateSection('overview')} /> : null}
+    <Text style={styles.note}>This is your saved public profile. Private evidence and unsaved edits are excluded.</Text>
     {previewLoading ? <LoadingState /> : previewError ? <ErrorState error={previewError} onRetry={() => void loadPreview()} />
-      : preview?.kind === 'renter' ? <RenterPublicProfileContent profile={preview} label="Saved public preview" /> : null}
+      : preview?.kind === 'renter' ? <RenterPublicProfileContent profile={preview} label="Saved public preview" />
+      : preview?.kind === 'landlord' ? <LandlordPublicProfileContent profile={preview} label="Saved public preview" /> : null}
   </View>;
   return <View style={styles.content}>
-    {renter ? <>
+    {renter && !routed ? <>
       <Button label="Back to profile" variant="secondary" disabled={dirty || busy} onPress={() => navigateSection('overview')} />
       <Text style={styles.heading}>{section === 'about' ? 'Personal Details / About Me' : section === 'housing' ? 'Housing Preferences' : 'Personal Story'}</Text>
       {dirty ? <Text style={styles.note}>Save your changes or discard them before returning.</Text> : null}
       {dirty ? <Button label="Discard changes" variant="secondary" disabled={busy} onPress={() => { hydrate(profile); setError(null); setSuccess(null); }} /> : null}
-    </> : <Text style={styles.heading}>Edit your profile</Text>}
+    </> : !renter && !routed ? <Text style={styles.heading}>Edit your profile</Text> : dirty ? <>
+      <Text style={styles.note}>You have unsaved changes.</Text>
+      <Button label="Discard changes" variant="secondary" disabled={busy} onPress={() => { hydrate(profile); setError(null); setSuccess(null); }} />
+    </> : null}
     <StatusBadge label={dirty ? 'Unsaved changes' : 'Saved account profile'} tone={dirty ? 'highlight' : 'neutral'} />
-    {!renter ? <ProfileVerification verification={profile.verification} /> : null}
+    {!renter && !routed ? <ProfileVerification verification={profile.verification} /> : null}
     {loadError ? <ErrorState error={loadError} onRetry={reload} /> : null}
     <Text style={styles.note}>Portrait URLs, bio and prompts are public. Never include identity scans, financial documents or private storage links.</Text>
     {visibleFields.map((field) => <FormInput key={field.key} label={field.label} value={draft[field.key] ?? ''}
@@ -126,7 +142,7 @@ function ProfileForm({ profile, onSectionChange }: { profile: OwnProfile; onSect
       autoCapitalize={field.key === 'photoUrl' ? 'none' : 'sentences'}
       keyboardType={field.numeric ? 'decimal-pad' : field.key === 'photoUrl' ? 'url' : 'default'}
       onChangeText={(value) => { setDraft((current) => ({ ...current, [field.key]: value })); setSuccess(null); }} />)}
-    {!renter || section === 'about' ? <><SelectionOption label="Make my profile discoverable to the other role" selected={discoverable} disabled={busy}
+    {(!renter && !routed) || section === 'about' ? <><SelectionOption label="Make my profile discoverable to the other role" selected={discoverable} disabled={busy}
       onPress={() => { setDiscoverable((value) => !value); setSuccess(null); }} />
     <Text style={styles.note}>Choose whether other people can discover your profile.</Text></> : null}
     {renter ? section === 'housing' ? <>
@@ -138,18 +154,18 @@ function ProfileForm({ profile, onSectionChange }: { profile: OwnProfile; onSect
       {(['pet_friendly', 'smoke_free', 'sharing'] as const).map((value) => <SelectionOption key={value}
         label={{ pet_friendly: 'Pet friendly', smoke_free: 'Smoke free', sharing: 'Sharing' }[value]} selected={preferences.includes(value)} disabled={busy}
         onPress={() => { setPreferences((current) => current.includes(value) ? current.filter((item) => item !== value) : [...current, value]); setSuccess(null); }} />)}
-    </> : null : <>
+    </> : null : !routed || section === 'business' ? <>
       <Text style={styles.heading}>Landlord type (optional)</Text>
       <View style={styles.row}>{(['individual', 'company', 'agent'] as const).map((value) => <Button key={value} label={value}
         disabled={busy} accessibilityState={{ selected: landlordType === value }} variant={landlordType === value ? 'primary' : 'secondary'}
         onPress={() => { setLandlordType(landlordType === value ? null : value); setSuccess(null); }} />)}</View>
       <Text style={styles.note}>Registration numbers are stored as submitted. Only the server can report pending or successful checks.</Text>
-    </>}
+    </> : null}
     {error ? <Text accessibilityRole="alert" style={styles.body}>{error}</Text> : null}
     {success ? <Text accessibilityLiveRegion="polite" style={styles.body}>{success}</Text> : null}
     <Button label="Save profile" loading={busy} disabled={!dirty || busy || previewLoading} onPress={() => void handleSave()} />
     <Button label="Reload saved profile" variant="secondary" disabled={dirty || busy} onPress={() => void reloadForm()} />
-    {!renter ? <>
+    {!renter && !routed ? <>
     <Button label="Preview saved public profile" variant="secondary" loading={previewLoading} disabled={busy} onPress={() => void loadPreview()} />
     <Text style={styles.note}>The preview comes from your saved account. Unsaved edits are excluded, even while your profile is hidden.</Text>
     {previewError ? <ErrorState error={previewError} onRetry={() => void loadPreview()} /> : null}
@@ -165,6 +181,6 @@ function ProfileForm({ profile, onSectionChange }: { profile: OwnProfile; onSect
         <Button label="Remove local photo draft" variant="secondary" onPress={() => setLocalPhoto(null)} /></> : null}
       <Text style={styles.note}>Photo drafts stay on this device and are not uploaded. A public portrait link can be saved above.</Text>
     </> : null}
-    {base.kind === 'landlord' ? <ArcsPreferences scope="default" /> : null}
+    {base.kind === 'landlord' && !routed ? <ArcsPreferences scope="default" /> : null}
   </View>;
 }

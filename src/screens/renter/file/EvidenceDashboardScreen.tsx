@@ -1,7 +1,5 @@
 import { ErrorState, LoadingState } from '../../../components/QueryState';
-import type { NativeStackNavigationProp, NativeStackScreenProps } from '@react-navigation/native-stack';
-import type { RenterProfileStackParamList } from '../../../navigation/renter/RenterProfileStack';
-import { Button } from '../../../components/Button';
+import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
@@ -18,7 +16,6 @@ export function EvidenceDashboardScreen({ navigation }: Props) {
   const catalogue = useEvidenceCatalogue();
   return (
     <ScreenContainer>
-      <Button label="Back to profile" variant="secondary" onPress={() => navigation.getParent<NativeStackNavigationProp<RenterProfileStackParamList>>()?.goBack()} />
       <Text style={styles.intro}>
         Tell your story through Affordability, Reliability, Community and Stability. Choose the
         evidence that fits your circumstances; no single document is required.
