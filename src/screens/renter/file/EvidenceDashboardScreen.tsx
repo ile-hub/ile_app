@@ -1,41 +1,26 @@
-import { Ionicons } from '@expo/vector-icons';
+import { ErrorState, LoadingState } from '../../../components/QueryState';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { useLayoutEffect } from 'react';
+import { Ionicons } from '@expo/vector-icons';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Card } from '../../../components/Card';
 import { ScreenContainer } from '../../../components/ScreenContainer';
-import { TRUST_PILLARS } from '../../../lib/trustPillars';
+import { TRUST_PILLARS, useEvidenceCatalogue } from '../../../lib/trustPillars';
 import type { RenterFileStackParamList } from '../../../navigation/renter/RenterFileStack';
 import { colors } from '../../../theme/colors';
 
 type Props = NativeStackScreenProps<RenterFileStackParamList, 'EvidenceDashboard'>;
 
-// Per-pillar view of what's submitted vs. open. There's no working
-// GET /evidence integration yet (ile-api's endpoint needs a renter_profiles
-// row provisioned server-side first — see RenterFileScreen's old note), so
-// every pillar honestly reads as "0 submitted" rather than a fetched count.
+// Catalogue counts are not evidence-submission counts. Persistence is Phase 2.
 export function EvidenceDashboardScreen({ navigation }: Props) {
-  useLayoutEffect(() => {
-    navigation.setOptions({
-      headerRight: () => (
-        <Pressable
-          accessibilityRole="button"
-          hitSlop={8}
-          onPress={() => navigation.navigate('TrustProfile')}
-        >
-          <Text style={styles.headerAction}>Trust Profile</Text>
-        </Pressable>
-      ),
-    });
-  }, [navigation]);
-
+  const catalogue = useEvidenceCatalogue();
   return (
     <ScreenContainer>
       <Text style={styles.intro}>
-        Your file collects evidence across four pillars. Real names are shown here — it's your
-        own data.
+        Tell your story through Affordability, Reliability, Community and Stability. Choose the
+        evidence that fits your circumstances; no single document is required.
       </Text>
+      {catalogue.isLoading ? <LoadingState /> : catalogue.error ? <ErrorState error={catalogue.error} onRetry={catalogue.reload} /> : null}
       {TRUST_PILLARS.map((pillar) => (
         <Pressable
           key={pillar.id}
@@ -48,7 +33,8 @@ export function EvidenceDashboardScreen({ navigation }: Props) {
             </View>
             <View style={styles.rowText}>
               <Text style={styles.pillarLabel}>{pillar.label}</Text>
-              <Text style={styles.pillarStatus}>Nothing submitted yet</Text>
+              <Text style={styles.pillarStatus}>Saving evidence is not available yet</Text>
+              {catalogue.data && !catalogue.error ? <Text style={styles.pillarStatus}>{catalogue.data.filter((option) => option.pillar === pillar.id).length} optional evidence types</Text> : null}
             </View>
             <Ionicons color={colors.textMuted} name="chevron-forward" size={18} />
           </Card>
@@ -59,7 +45,6 @@ export function EvidenceDashboardScreen({ navigation }: Props) {
 }
 
 const styles = StyleSheet.create({
-  headerAction: { color: colors.accent, fontSize: 14, fontWeight: '700' },
   intro: { color: colors.textSecondary, fontSize: 14, lineHeight: 21, marginBottom: 20 },
   card: {
     alignItems: 'center',

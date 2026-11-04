@@ -6,6 +6,7 @@ import { useLayoutEffect, useState } from 'react';
 import { Alert, Image, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { ScreenContainer } from '../../../components/ScreenContainer';
+import { Button } from '../../../components/Button';
 import type { RenterFileStackParamList } from '../../../navigation/renter/RenterFileStack';
 import { colors } from '../../../theme/colors';
 
@@ -20,11 +21,18 @@ type PickedFile = { uri: string; name: string; kind: 'photo' | 'document' };
 // honest "not connected yet" submit button, rather than pretending it saved.
 export function EvidenceUploadScreen({ navigation, route }: Props) {
   const { pathwayType } = route.params;
+  const [pickerError, setPickerError] = useState<string | null>(null);
   const [picked, setPicked] = useState<PickedFile | null>(null);
 
   useLayoutEffect(() => {
     navigation.setOptions({ title: pathwayType });
   }, [navigation, pathwayType]);
+
+  async function runPicker(pick: () => Promise<void>) {
+    setPickerError(null);
+    try { await pick(); }
+    catch { setPickerError('Unable to select this file. Please try again.'); }
+  }
 
   async function takePhoto() {
     const permission = await ImagePicker.requestCameraPermissionsAsync();
@@ -65,19 +73,21 @@ export function EvidenceUploadScreen({ navigation, route }: Props) {
       <Text style={styles.subtitle}>Take a photo, or choose a photo or document from your device.</Text>
 
       <View style={styles.actions}>
-        <Pressable onPress={takePhoto} style={styles.actionButton}>
+        <Pressable onPress={() => void runPicker(takePhoto)} style={styles.actionButton}>
           <Ionicons color={colors.accent} name="camera-outline" size={20} />
           <Text style={styles.actionLabel}>Take Photo</Text>
         </Pressable>
-        <Pressable onPress={chooseFromLibrary} style={styles.actionButton}>
+        <Pressable onPress={() => void runPicker(chooseFromLibrary)} style={styles.actionButton}>
           <Ionicons color={colors.accent} name="images-outline" size={20} />
           <Text style={styles.actionLabel}>Photo Library</Text>
         </Pressable>
-        <Pressable onPress={chooseDocument} style={styles.actionButton}>
+        <Pressable onPress={() => void runPicker(chooseDocument)} style={styles.actionButton}>
           <Ionicons color={colors.accent} name="document-outline" size={20} />
           <Text style={styles.actionLabel}>Document</Text>
         </Pressable>
       </View>
+
+      {pickerError ? <Text accessibilityRole="alert" style={styles.footnote}>{pickerError}</Text> : null}
 
       {picked ? (
         <View style={styles.previewRow}>
@@ -91,18 +101,18 @@ export function EvidenceUploadScreen({ navigation, route }: Props) {
           <Text numberOfLines={1} style={styles.previewName}>
             {picked.name}
           </Text>
-          <Pressable hitSlop={8} onPress={() => setPicked(null)}>
+          <Pressable accessibilityRole="button" accessibilityLabel="Remove selected file" hitSlop={8} onPress={() => setPicked(null)}>
             <Ionicons color={colors.textMuted} name="close-circle" size={20} />
           </Pressable>
         </View>
       ) : null}
 
-      <Pressable disabled={!picked} style={[styles.submitButton, !picked && styles.submitButtonDisabled]}>
-        <Text style={styles.submitButtonText}>Submit evidence</Text>
-      </Pressable>
+      <View style={{ marginTop: 28 }}>
+        <Button disabled label="Submission unavailable" />
+      </View>
       <Text style={styles.footnote}>
-        Submitting evidence isn't connected to your account yet — this file stays on your device
-        for now.
+        Use dummy documents only. Your selection is not uploaded or saved to your account
+        and is cleared when this screen closes.
       </Text>
     </ScreenContainer>
   );
@@ -143,15 +153,5 @@ const styles = StyleSheet.create({
     width: 44,
   },
   previewName: { color: colors.textPrimary, flex: 1, fontSize: 14, fontWeight: '600' },
-  submitButton: {
-    alignItems: 'center',
-    backgroundColor: colors.accent,
-    borderRadius: 28,
-    justifyContent: 'center',
-    marginTop: 28,
-    minHeight: 56,
-  },
-  submitButtonDisabled: { backgroundColor: colors.accentMuted },
-  submitButtonText: { color: colors.surface, fontSize: 16, fontWeight: '700' },
   footnote: { color: colors.textMuted, fontSize: 12, marginTop: 10, textAlign: 'center' },
 });

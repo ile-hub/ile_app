@@ -31,7 +31,9 @@ export function LandlordPropertiesStack() {
       <Stack.Screen
         component={AddEditPropertyScreen}
         name="AddEditProperty"
-        options={{ title: 'Add Property' }}
+        options={({ route }) => ({
+          title: route.params.propertyId ? 'Edit Property' : 'Add Property',
+        })}
       />
       <Stack.Screen
         component={PropertyPreferencesScreen}

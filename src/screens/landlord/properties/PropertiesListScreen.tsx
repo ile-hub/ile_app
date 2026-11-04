@@ -1,24 +1,35 @@
 import { Ionicons } from '@expo/vector-icons';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
+import type { Property, PropertyStatus } from '@yourorg/ile-shared-types';
 import { useLayoutEffect } from 'react';
-import { Pressable } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 
+import { Card } from '../../../components/Card';
 import { EmptyState } from '../../../components/EmptyState';
 import { ListScreenContainer } from '../../../components/ListScreenContainer';
+import { ErrorState, LoadingState } from '../../../components/QueryState';
+import { api } from '../../../lib/api';
+import { propertyName, propertySummaryLine } from '../../../lib/properties';
+import { useApiQuery } from '../../../lib/useApiQuery';
 import type { LandlordPropertiesStackParamList } from '../../../navigation/landlord/LandlordPropertiesStack';
 import { colors } from '../../../theme/colors';
 
 type Props = NativeStackScreenProps<LandlordPropertiesStackParamList, 'PropertiesList'>;
 
-// Placeholder shape for a property row, once there's a properties API to
-// back it.
-type PropertySummary = { id: string };
+const STATUS_LABELS: Record<PropertyStatus, string> = {
+  draft: 'Draft',
+  published: 'Published',
+  archived: 'Archived',
+};
 
-// No properties API exists yet, so this is the real empty state — but the
-// "+" to add one is real navigation, ready for whenever listing a property
-// actually persists somewhere. Uses ListScreenContainer (FlatList) since
-// this is an open-ended list once real data exists.
+// All of the landlord's properties, any status (GET /properties/me).
+// Refetches on focus, so it's current after adding or editing one.
 export function PropertiesListScreen({ navigation }: Props) {
+  const { data, error, isLoading, isRefreshing, refresh, reload } = useApiQuery(
+    'properties/me',
+    api.listMyProperties,
+  );
+
   useLayoutEffect(() => {
     navigation.setOptions({
       headerRight: () => (
@@ -34,19 +45,67 @@ export function PropertiesListScreen({ navigation }: Props) {
   }, [navigation]);
 
   return (
-    <ListScreenContainer<PropertySummary>
+    <ListScreenContainer<Property>
       ListEmptyComponent={
-        <EmptyState
-          actionLabel="Add a property"
-          icon="business-outline"
-          onAction={() => navigation.navigate('AddEditProperty', {})}
-          subtitle="Add your first one to start receiving applicants."
-          title="No properties yet"
-        />
+        isLoading ? (
+          <LoadingState />
+        ) : error ? (
+          <ErrorState error={error} onRetry={reload} />
+        ) : (
+          <EmptyState
+            actionLabel="Add a property"
+            icon="business-outline"
+            onAction={() => navigation.navigate('AddEditProperty', {})}
+            subtitle="Add a property so we can help you discover compatible renters."
+            title="No properties yet"
+          />
+        )
       }
-      data={[]}
+      data={data ?? []}
       keyExtractor={(item) => item.id}
-      renderItem={() => null}
+      onRefresh={refresh}
+      refreshing={isRefreshing}
+      renderItem={({ item }) => (
+        <Pressable
+          onPress={() => navigation.navigate('PropertyDetail', { propertyId: item.id })}
+          style={({ pressed }) => pressed && styles.pressed}
+        >
+          <Card style={styles.card}>
+            <View style={styles.header}>
+              <Text numberOfLines={1} style={styles.title}>
+                {propertyName(item)}
+              </Text>
+              {item.status !== 'draft' ? <View style={[styles.badge, item.status === 'published' && styles.badgeLive]}>
+                <Text
+                  style={[styles.badgeText, item.status === 'published' && styles.badgeTextLive]}
+                >
+                  {STATUS_LABELS[item.status]}
+                </Text>
+              </View> : null}
+            </View>
+            <Text style={styles.subtitle}>{propertySummaryLine(item)}</Text>
+          </Card>
+        </Pressable>
+      )}
     />
   );
 }
+
+const styles = StyleSheet.create({
+  pressed: { opacity: 0.7 },
+  card: { marginBottom: 12 },
+  header: { alignItems: 'center', flexDirection: 'row', gap: 10, justifyContent: 'space-between' },
+  title: { color: colors.textPrimary, flex: 1, fontSize: 16, fontWeight: '700' },
+  subtitle: { color: colors.textSecondary, fontSize: 13, marginTop: 4 },
+  badge: {
+    backgroundColor: colors.background,
+    borderColor: colors.border,
+    borderRadius: 12,
+    borderWidth: 1,
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+  },
+  badgeLive: { backgroundColor: colors.accentMuted, borderColor: colors.accentMuted },
+  badgeText: { color: colors.textMuted, fontSize: 11, fontWeight: '700' },
+  badgeTextLive: { color: colors.accentPressed },
+});

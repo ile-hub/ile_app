@@ -1,7 +1,11 @@
+import { LegalPreferences } from '../components/LegalPreferences';
+import { colors } from '../theme/colors';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useState } from 'react';
 import {
+  Image,
   KeyboardAvoidingView,
+  Modal,
   Platform,
   Pressable,
   ScrollView,
@@ -28,6 +32,9 @@ export function SignupScreen({ navigation }: Props) {
   const [passwordError, setPasswordError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [termsAccepted, setTermsAccepted] = useState(false);
+  const [showLegal, setShowLegal] = useState(false);
+  const signupDisabled = isSubmitting || !email || !password || !displayName.trim() || !termsAccepted;
 
   function validateEmail(value: string) {
     const nextError = isValidEmail(value) ? null : 'Enter a valid email address.';
@@ -42,7 +49,7 @@ export function SignupScreen({ navigation }: Props) {
     setPasswordError(nextPasswordError);
     setError(null);
 
-    if (!isEmailValid || nextPasswordError || !displayName.trim()) return;
+    if (!isEmailValid || nextPasswordError || !displayName.trim() || !termsAccepted) return;
 
     setIsSubmitting(true);
     const { error: signUpError } = await signUp({ email, password, displayName, role });
@@ -72,20 +79,14 @@ export function SignupScreen({ navigation }: Props) {
           showsVerticalScrollIndicator={false}
         >
           <View style={styles.brand}>
-            <View style={styles.brandMark} />
-            <Text style={styles.brandName}>Leri</Text>
+            <Image source={require('../../assets/leri-logo.png')} style={styles.brandLogo}
+              resizeMode="contain" accessibilityLabel="Lérí" accessibilityRole="image" />
           </View>
 
-          {/* <View style={styles.hero} accessibilityElementsHidden>
-            <View style={styles.heroBuildingLeft} />
-            <View style={styles.heroBuildingRight} />
-            <View style={styles.heroLine} />
-          </View> */}
-
           <View style={styles.intro}>
-            <Text style={styles.title}>Renting works better when people vouch for people.</Text>
+            <Text style={styles.title}>Renting works better when trust goes both ways.</Text>
             <Text style={styles.subtitle}>
-              Join 12,400+ renters building a profile that speaks for them.
+              Tell us who you are, what matters to you and what you’re looking for. We’ll help you discover compatible people.
             </Text>
           </View>
 
@@ -95,7 +96,7 @@ export function SignupScreen({ navigation }: Props) {
               autoComplete="name"
               label="Display name"
               onChangeText={setDisplayName}
-              placeholder="How should we address you?"
+              placeholder="Name"
               returnKeyType="next"
               value={displayName}
             />
@@ -142,7 +143,7 @@ export function SignupScreen({ navigation }: Props) {
                       style={[styles.roleOption, isSelected && styles.roleOptionSelected]}
                     >
                       <Text style={[styles.roleText, isSelected && styles.roleTextSelected]}>
-                        {option === 'renter' ? 'Renter' : 'Landlord'}
+                        {option === 'renter' ? 'I’m renting' : 'I’m a landlord'}
                       </Text>
                     </Pressable>
                   );
@@ -150,21 +151,41 @@ export function SignupScreen({ navigation }: Props) {
               </View>
             </View>
 
+            <View style={styles.termsField}>
+              <Pressable
+                accessibilityRole="checkbox"
+                accessibilityLabel="I agree to the Terms and Conditions"
+                accessibilityState={{ checked: termsAccepted, disabled: isSubmitting }}
+                disabled={isSubmitting}
+                onPress={() => setTermsAccepted((accepted) => !accepted)}
+                style={styles.termsRow}
+              >
+                <View style={[styles.checkbox, termsAccepted && styles.checkboxChecked]}>
+                  {termsAccepted ? <Text style={styles.checkmark}>✓</Text> : null}
+                </View>
+                <Text style={styles.termsText}>I agree to the Terms and Conditions.</Text>
+              </Pressable>
+              <Pressable accessibilityRole="button" onPress={() => setShowLegal(true)} style={styles.termsLink}>
+                <Text style={styles.termsLinkText}>Read terms and privacy notice</Text>
+              </Pressable>
+            </View>
+
             {error ? <Text style={styles.submitError}>{error}</Text> : null}
 
             <Pressable
               accessibilityRole="button"
-              disabled={isSubmitting || !email || !password || !displayName.trim()}
+              disabled={signupDisabled}
+              accessibilityState={{ disabled: signupDisabled, busy: isSubmitting }}
               onPress={handleSignup}
               style={({ pressed }) => [
                 styles.submitButton,
                 pressed && styles.submitButtonPressed,
-                (isSubmitting || !email || !password || !displayName.trim()) &&
+                signupDisabled &&
                   styles.submitButtonDisabled,
               ]}
             >
               <Text style={styles.submitText}>
-                {isSubmitting ? 'Creating your profile…' : 'Join Leri'}
+                {isSubmitting ? 'Creating your profile…' : 'Join Lérí'}
               </Text>
             </Pressable>
           </View>
@@ -174,12 +195,22 @@ export function SignupScreen({ navigation }: Props) {
           </Pressable>
         </ScrollView>
       </KeyboardAvoidingView>
+      <Modal visible={showLegal} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setShowLegal(false)}>
+        <SafeAreaView style={styles.safeArea}>
+          <Pressable accessibilityRole="button" onPress={() => setShowLegal(false)} style={styles.closeLegal}>
+            <Text style={styles.termsLinkText}>Done</Text>
+          </Pressable>
+          <ScrollView contentContainerStyle={styles.legalContent}>
+            <LegalPreferences />
+          </ScrollView>
+        </SafeAreaView>
+      </Modal>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  safeArea: { backgroundColor: '#F7F2EB', flex: 1 },
+  safeArea: { backgroundColor: colors.background, flex: 1 },
   content: { paddingBottom: 28, paddingHorizontal: 24 },
   brand: {
     alignItems: 'center',
@@ -188,82 +219,54 @@ const styles = StyleSheet.create({
     paddingBottom: 18,
     paddingTop: 10,
   },
-  brandMark: {
-    backgroundColor: '#C84A24',
-    borderRadius: 18,
-    height: 36,
-    width: 36,
-  },
-  brandName: { color: '#1D1815', fontSize: 24, fontWeight: '800' },
-  hero: {
-    backgroundColor: '#E8DFD4',
-    borderRadius: 3,
-    height: 118,
-    overflow: 'hidden',
-    position: 'relative',
-  },
-  heroBuildingLeft: {
-    backgroundColor: '#D7C9BC',
-    bottom: -18,
-    height: 112,
-    left: 22,
-    position: 'absolute',
-    transform: [{ rotate: '-8deg' }],
-    width: '48%',
-  },
-  heroBuildingRight: {
-    backgroundColor: '#DED2C6',
-    bottom: -28,
-    height: 130,
-    position: 'absolute',
-    right: 22,
-    transform: [{ rotate: '9deg' }],
-    width: '44%',
-  },
-  heroLine: {
-    backgroundColor: '#B9A99B',
-    bottom: 28,
-    height: 1,
-    left: 20,
-    position: 'absolute',
-    right: 20,
-  },
+  brandLogo: { width: 88, height: 88 },
   intro: { paddingBottom: 22, paddingTop: 18 },
   
   title: {
-    color: '#1D1815',
+    color: colors.textPrimary,
     fontSize: 31,
     fontWeight: '800',
     letterSpacing: -0.8,
     lineHeight: 35,
   },
-  subtitle: { color: '#675D56', fontSize: 15, lineHeight: 21, marginTop: 10 },
+  subtitle: { color: colors.textSecondary, fontSize: 15, lineHeight: 21, marginTop: 10 },
   form: { gap: 14 },
   roleField: { gap: 7 },
-  roleLabel: { color: '#312823', fontSize: 13, fontWeight: '600' },
+  roleLabel: { color: colors.textPrimary, fontSize: 13, fontWeight: '600' },
   roleSelector: {
-    backgroundColor: '#E8DFD6',
+    backgroundColor: colors.accentMuted,
     borderRadius: 16,
     flexDirection: 'row',
     padding: 4,
   },
   roleOption: { alignItems: 'center', borderRadius: 13, flex: 1, paddingVertical: 11 },
-  roleOptionSelected: { backgroundColor: '#FFFCF8' },
-  roleText: { color: '#6F625A', fontSize: 15, fontWeight: '600' },
-  roleTextSelected: { color: '#9D361A' },
-  submitError: { color: '#A73B2B', fontSize: 13, textAlign: 'center' },
+  roleOptionSelected: { backgroundColor: colors.surface },
+  roleText: { color: colors.textMuted, fontSize: 15, fontWeight: '600' },
+  roleTextSelected: { color: colors.accent },
+  termsField: { gap: 2 },
+  termsRow: { alignItems: 'center', flexDirection: 'row', gap: 12, minHeight: 44 },
+  checkbox: { alignItems: 'center', justifyContent: 'center', width: 24, height: 24,
+    borderWidth: 2, borderColor: colors.accent, borderRadius: 5, backgroundColor: colors.surface },
+  checkboxChecked: { backgroundColor: colors.accent },
+  checkmark: { color: colors.onAccent, fontSize: 17, fontWeight: '700' },
+  termsText: { color: colors.textPrimary, fontSize: 14, lineHeight: 20, flex: 1 },
+  termsLink: { alignSelf: 'flex-start', justifyContent: 'center', minHeight: 44, paddingLeft: 36 },
+  termsLinkText: { color: colors.accent, fontSize: 14, fontWeight: '600', textDecorationLine: 'underline' },
+  closeLegal: { alignSelf: 'flex-end', paddingHorizontal: 24, paddingVertical: 16 },
+  legalContent: { paddingHorizontal: 24, paddingBottom: 28 },
+  submitError: { color: colors.danger, fontSize: 13, textAlign: 'center' },
   submitButton: {
     alignItems: 'center',
-    backgroundColor: '#A93B1E',
+    backgroundColor: colors.accent,
     borderRadius: 28,
     justifyContent: 'center',
     marginTop: 2,
     minHeight: 56,
     paddingHorizontal: 20,
   },
-  submitButtonPressed: { backgroundColor: '#8D2F18' },
+  submitButtonPressed: { backgroundColor: colors.accentPressed },
   submitButtonDisabled: { opacity: 0.45 },
-  submitText: { color: '#FFF9F3', fontSize: 17, fontWeight: '700' },
+  submitText: { color: colors.onAccent, fontSize: 17, fontWeight: '700' },
   loginLink: { alignItems: 'center', paddingTop: 18 },
-  loginText: { color: '#2D2521', fontSize: 14, fontWeight: '600' },
+  loginText: { color: colors.textPrimary, fontSize: 14, fontWeight: '600' },
 });

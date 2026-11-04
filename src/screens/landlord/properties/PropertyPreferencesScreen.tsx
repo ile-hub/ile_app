@@ -1,102 +1,35 @@
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
-
-import { ScreenContainer } from '../../../components/ScreenContainer';
+import { Text, View } from 'react-native';
+import { ArcsPreferences } from '../../../components/ArcsPreferences';
+import { Button } from '../../../components/Button';
+import { FormInput } from '../../../components/FormInput';
+import { ScreenContainer, screenStyles as styles } from '../../../components/ScreenContainer';
+import { StatusBadge } from '../../../components/StatusBadge';
 import type { LandlordPropertiesStackParamList } from '../../../navigation/landlord/LandlordPropertiesStack';
-import { colors } from '../../../theme/colors';
 
 type Props = NativeStackScreenProps<LandlordPropertiesStackParamList, 'PropertyPreferences'>;
-
-const HOUSEHOLD_TYPES = ['Single', 'Couple', 'Family', 'Sharers'] as const;
-const TENANCY_LENGTHS = ['6 months', '12 months', '18+ months'] as const;
-
-// Per-property matching preferences (maps to landlord_preferences.property_id
-// server-side, once that exists) — who's a good fit, not the property's own
-// rules (those live as structured chips on AddEditPropertyScreen, since
-// they're an attribute of the listing itself, not a matching filter).
-// Editable locally; not synced yet.
 export function PropertyPreferencesScreen({ route }: Props) {
-  void route.params.propertyId;
-  const [householdType, setHouseholdType] = useState<(typeof HOUSEHOLD_TYPES)[number] | null>(
-    null,
-  );
-  const [tenancyLength, setTenancyLength] = useState<(typeof TENANCY_LENGTHS)[number] | null>(
-    null,
-  );
-
-  return (
-    <ScreenContainer>
-      <Text style={styles.sectionTitle}>Household type</Text>
-      <View style={styles.chipRow}>
-        {HOUSEHOLD_TYPES.map((type) => (
-          <Pressable
-            key={type}
-            onPress={() => setHouseholdType(type)}
-            style={[styles.chip, householdType === type && styles.chipSelected]}
-          >
-            <Text style={[styles.chipText, householdType === type && styles.chipTextSelected]}>
-              {type}
-            </Text>
-          </Pressable>
-        ))}
-      </View>
-
-      <Text style={styles.sectionTitle}>Tenancy length</Text>
-      <View style={styles.chipRow}>
-        {TENANCY_LENGTHS.map((length) => (
-          <Pressable
-            key={length}
-            onPress={() => setTenancyLength(length)}
-            style={[styles.chip, tenancyLength === length && styles.chipSelected]}
-          >
-            <Text style={[styles.chipText, tenancyLength === length && styles.chipTextSelected]}>
-              {length}
-            </Text>
-          </Pressable>
-        ))}
-      </View>
-
-      <Pressable style={styles.saveButton}>
-        <Text style={styles.saveButtonText}>Save</Text>
-      </Pressable>
-      <Text style={styles.footnote}>
-        Preferences aren't synced to this property's account yet — they'll reset if you leave
-        this screen.
-      </Text>
-    </ScreenContainer>
-  );
+  return <PropertyPreferencesDraft key={route.params.propertyId} />;
 }
-
-const styles = StyleSheet.create({
-  sectionTitle: {
-    color: colors.textPrimary,
-    fontSize: 13,
-    fontWeight: '700',
-    marginBottom: 10,
-    marginTop: 20,
-    textTransform: 'uppercase',
-  },
-  chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  chip: {
-    backgroundColor: colors.surface,
-    borderColor: colors.borderStrong,
-    borderRadius: 20,
-    borderWidth: 1,
-    paddingHorizontal: 16,
-    paddingVertical: 9,
-  },
-  chipSelected: { backgroundColor: colors.accent, borderColor: colors.accent },
-  chipText: { color: colors.textPrimary, fontSize: 13, fontWeight: '600' },
-  chipTextSelected: { color: colors.surface },
-  saveButton: {
-    alignItems: 'center',
-    backgroundColor: colors.accent,
-    borderRadius: 28,
-    justifyContent: 'center',
-    marginTop: 28,
-    minHeight: 56,
-  },
-  saveButtonText: { color: colors.surface, fontSize: 16, fontWeight: '700' },
-  footnote: { color: colors.textMuted, fontSize: 12, marginTop: 10, textAlign: 'center' },
-});
+function PropertyPreferencesDraft() {
+  const [custom, setCustom] = useState(false);
+  const [occupants, setOccupants] = useState('');
+  const [date, setDate] = useState('');
+  const [duration, setDuration] = useState('');
+  return <ScreenContainer><View style={styles.content}>
+    <StatusBadge label="Explore property preferences" tone="highlight" />
+    <Text style={styles.heading}>Factual tenancy requirements</Text>
+    <Text style={styles.note}>Save practical property details in Edit details. Choices on this screen are not saved or applied.</Text>
+    <FormInput label="Permitted occupants" keyboardType="number-pad" value={occupants} onChangeText={setOccupants} />
+    <FormInput label="Available move date (YYYY-MM-DD)" value={date} onChangeText={setDate} />
+    <FormInput label="Minimum / expected tenancy duration" value={duration} onChangeText={setDuration} />
+    <Text style={styles.heading}>ARCS preferences</Text>
+    <Button label="Use my default preferences" variant={!custom ? 'primary' : 'secondary'}
+      accessibilityState={{ selected: !custom }} onPress={() => setCustom(false)} />
+    <Button label="Customise for this property" variant={custom ? 'primary' : 'secondary'}
+      accessibilityState={{ selected: custom }} onPress={() => setCustom(true)} />
+    {custom ? <ArcsPreferences scope="property" /> : <Text style={styles.body}>Using saved defaults is not available here yet. This choice is not saved or applied.</Text>}
+    <Button disabled label="Save property preferences unavailable" />
+  </View></ScreenContainer>;
+}

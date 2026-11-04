@@ -1,6 +1,8 @@
+import { colors } from '../theme/colors';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useState } from 'react';
 import {
+  Image,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -11,14 +13,16 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { useAuth } from '../auth/AuthProvider';
 import { FormInput } from '../components/FormInput';
-import { getSelfServeRole, signIn } from '../lib/auth';
+import { signIn } from '../lib/auth';
 import { isValidEmail } from '../lib/validation';
 import type { RootStackParamList } from '../navigation/RootNavigator';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Login'>;
 
 export function LoginScreen({ navigation }: Props) {
+  const { sessionError } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -37,19 +41,12 @@ export function LoginScreen({ navigation }: Props) {
 
     setError(null);
     setIsSubmitting(true);
-    const { data, error: signInError } = await signIn(email, password);
+    const { error: signInError } = await signIn(email, password);
 
+    // On success AuthProvider loads GET /me and swaps this screen out for
+    // the role's tabs; if that fails it comes back here with sessionError.
     if (signInError) {
       setError(signInError.message);
-      setIsSubmitting(false);
-      return;
-    }
-
-    const user = data.session?.user ?? data.user;
-    const role = user ? getSelfServeRole(user) : null;
-
-    if (!role) {
-      setError('Your account does not have a valid renter or landlord role.');
       setIsSubmitting(false);
     }
   }
@@ -70,14 +67,14 @@ export function LoginScreen({ navigation }: Props) {
           showsVerticalScrollIndicator={false}
         >
           <View style={styles.brand}>
-            <View style={styles.brandMark} />
-            <Text style={styles.brandName}>Leri</Text>
+            <Image source={require('../../assets/leri-logo.png')} style={styles.brandLogo}
+              resizeMode="contain" accessibilityLabel="Lérí" accessibilityRole="image" />
           </View>
 
           <View style={styles.intro}>
-            <Text style={styles.title}>Welcome back</Text>
+            <Text style={styles.title}>Better renting connections start here.</Text>
             <Text style={styles.subtitle}>
-              Your file is where you left it. Nothing was shared while you were away.
+              Discover people who fit what you’re looking for... without the guesswork.
             </Text>
           </View>
 
@@ -109,7 +106,9 @@ export function LoginScreen({ navigation }: Props) {
               value={password}
             />
 
-            {error ? <Text style={styles.error}>{error}</Text> : null}
+            {error ?? sessionError ? (
+              <Text style={styles.error}>{error ?? sessionError}</Text>
+            ) : null}
 
             <Pressable
               accessibilityRole="button"
@@ -130,28 +129,10 @@ export function LoginScreen({ navigation }: Props) {
               <Text style={styles.textAction}>Forgot your password?</Text>
             </Pressable>
 
-            <View style={styles.divider}>
-              <View style={styles.dividerLine} />
-              <Text style={styles.dividerText}>OR</Text>
-              <View style={styles.dividerLine} />
-            </View>
-
-            <Pressable
-              onPress={() => showUnavailable('One-time code login')}
-              style={styles.secondaryButton}
-            >
-              <Text style={styles.secondaryButtonText}>Email me a one-time code</Text>
-            </Pressable>
-            <Pressable
-              onPress={() => showUnavailable('Passkey login')}
-              style={styles.secondaryButton}
-            >
-              <Text style={styles.secondaryButtonText}>Use passkey</Text>
-            </Pressable>
           </View>
 
           <View style={styles.signupRow}>
-            <Text style={styles.signupPrompt}>New to Leri? </Text>
+            <Text style={styles.signupPrompt}>New to Lérí? </Text>
             <Pressable onPress={() => navigation.navigate('Signup')}>
               <Text style={styles.signupLink}>Create a profile</Text>
             </Pressable>
@@ -163,7 +144,7 @@ export function LoginScreen({ navigation }: Props) {
 }
 
 const styles = StyleSheet.create({
-  safeArea: { backgroundColor: '#F9F0E8', flex: 1 },
+  safeArea: { backgroundColor: colors.background, flex: 1 },
   content: { flexGrow: 1, paddingBottom: 24, paddingHorizontal: 32 },
   brand: {
     alignItems: 'center',
@@ -171,42 +152,28 @@ const styles = StyleSheet.create({
     gap: 10,
     paddingTop: 22,
   },
-  brandMark: { backgroundColor: '#D65A32', borderRadius: 16, height: 32, width: 32 },
-  brandName: { color: '#241D19', fontSize: 20, fontWeight: '800' },
-  intro: { marginTop: 62 },
-  title: { color: '#211B18', fontSize: 34, fontWeight: '800', letterSpacing: -0.8 },
-  subtitle: { color: '#6B5F58', fontSize: 15, lineHeight: 23, marginTop: 12 },
+  brandLogo: { width: 88, height: 88 },
+  intro: { marginTop: 24 },
+  title: { color: colors.textPrimary, fontSize: 34, fontWeight: '800', letterSpacing: -0.8 },
+  subtitle: { color: colors.textSecondary, fontSize: 15, lineHeight: 23, marginTop: 12 },
   form: { gap: 16, marginTop: 38 },
-  error: { color: '#A73B2B', fontSize: 13, textAlign: 'center' },
+  error: { color: colors.danger, fontSize: 13, textAlign: 'center' },
   loginButton: {
     alignItems: 'center',
-    backgroundColor: '#A93B1E',
+    backgroundColor: colors.accent,
     borderRadius: 28,
     justifyContent: 'center',
     minHeight: 56,
   },
-  loginButtonPressed: { backgroundColor: '#8D2F18' },
-  loginButtonDisabled: { backgroundColor: '#E9C9BC' },
-  loginButtonText: { color: '#FFF9F3', fontSize: 16, fontWeight: '700' },
+  loginButtonPressed: { backgroundColor: colors.accentPressed },
+  loginButtonDisabled: { backgroundColor: colors.accentMuted },
+  loginButtonText: { color: colors.onAccent, fontSize: 16, fontWeight: '700' },
   textAction: {
-    color: '#4B403A',
+    color: colors.textSecondary,
     fontSize: 14,
     fontWeight: '700',
     textAlign: 'center',
   },
-  divider: { alignItems: 'center', flexDirection: 'row', gap: 12 },
-  dividerLine: { backgroundColor: '#DED0C5', flex: 1, height: 1 },
-  dividerText: { color: '#786B63', fontSize: 12, fontWeight: '700' },
-  secondaryButton: {
-    alignItems: 'center',
-    backgroundColor: '#FFFCF8',
-    borderColor: '#D9CCC2',
-    borderRadius: 25,
-    borderWidth: 1,
-    justifyContent: 'center',
-    minHeight: 52,
-  },
-  secondaryButtonText: { color: '#302722', fontSize: 15, fontWeight: '700' },
   signupRow: {
     alignItems: 'center',
     flexDirection: 'row',
@@ -214,6 +181,6 @@ const styles = StyleSheet.create({
     marginTop: 'auto',
     paddingTop: 34,
   },
-  signupPrompt: { color: '#74675F', fontSize: 14 },
-  signupLink: { color: '#A93B1E', fontSize: 14, fontWeight: '800' },
+  signupPrompt: { color: colors.textMuted, fontSize: 14 },
+  signupLink: { color: colors.accent, fontSize: 14, fontWeight: '800' },
 });

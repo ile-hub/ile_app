@@ -1,0 +1,433 @@
+// Isolated contract/validation tests. Synthetic fixtures never enter the app UI
+// or call a live backend; successful persistence must still come from the server.
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import test from 'node:test';
+import vm from 'node:vm';
+import ts from 'typescript';
+
+function loadSource(relative, globals = {}) {
+  const exports = {};
+  const source = fs.readFileSync(new URL(relative, import.meta.url), 'utf8');
+  const compiled = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
+  vm.runInNewContext(compiled, { exports, URL, URLSearchParams, Date, ...globals });
+  return exports;
+}
+const { profileDraft, profilePatch, profileSummary } = loadSource('../src/lib/profiles.ts');
+const renter = {
+  kind: 'renter', id: 'test-only', displayName: 'Test account', bio: null, photoUrl: null,
+  personalStory: null, currentLocation: 'Private location', preferredLocation: null,
+  budgetMin: 500, budgetMax: 1000, targetMoveDate: null, tenancyLengthMonths: 12,
+  householdSize: 1, householdType: 'single', householdPreferences: [], discoverable: false,
+  verification: { identityStatus: 'unverified', photoStatus: 'unverified', mode: 'real' },
+  memberSince: '2026-01-01T00:00:00Z', updatedAt: '2026-01-01T00:00:00Z',
+};
+const plain = value => JSON.parse(JSON.stringify(value));
+
+test('profile patches contain only changed, editable role fields', () => {
+  assert.deepEqual(plain(profilePatch(renter, profileDraft(renter))), {});
+  const draft = { ...profileDraft(renter), bio: 'New bio', verification: 'verified', role: 'landlord', registrationNumbers: 'not-renter-data' };
+  assert.deepEqual(plain(profilePatch(renter, draft)), { bio: 'New bio' });
+});
+test('nullable clears, zero budget and partial-range validation follow the contract', () => {
+  assert.deepEqual(plain(profilePatch(renter, { ...profileDraft(renter), budgetMin: '0', currentLocation: '' })), { currentLocation: null, budgetMin: 0 });
+  assert.throws(() => profilePatch(renter, { ...profileDraft(renter), budgetMin: '1001' }), /Minimum budget/);
+  assert.throws(() => profilePatch(renter, { ...profileDraft(renter), budgetMax: '0.001' }), /two decimals/);
+  assert.throws(() => profilePatch(renter, { ...profileDraft(renter), householdSize: '31' }), /1 to 30/);
+  assert.throws(() => profilePatch(renter, { ...profileDraft(renter), tenancyLengthMonths: '1.5' }), /whole number/);
+});
+test('dates, required names and public portrait URLs are validated without accepting local files', () => {
+  for (const date of ['2026-02-30', '2026-13-01', '01/11/2026']) assert.throws(() => profilePatch(renter, { ...profileDraft(renter), targetMoveDate: date }), /calendar date/);
+  assert.equal(profilePatch(renter, { ...profileDraft(renter), targetMoveDate: '2028-02-29' }).targetMoveDate, '2028-02-29');
+  assert.throws(() => profilePatch(renter, { ...profileDraft(renter), displayName: ' ' }), /required/);
+  for (const url of ['file:///private/photo.jpg', 'http://example.test/a.jpg', 'https://user:password@example.test/a.jpg']) assert.throws(() => profilePatch(renter, { ...profileDraft(renter), photoUrl: url }), /HTTPS/);
+});
+test('landlord arrays are deduplicated and no renter or verification fields are sent', () => {
+  const landlord = { ...renter, kind: 'landlord', companyName: null, landlordType: null, lettingExperienceYears: 0,
+    numberOfProperties: 0, locationsCovered: [], communicationStyle: null, lettingApproach: null,
+    tenantExpectations: null, tenancySuccess: null, registrationNumbers: [], registrationDetails: null };
+  const draft = { ...profileDraft(landlord), registrationNumbers: ' test-one\ntest-one\n test-two ', locationsCovered: 'Edinburgh', personalStory: 'wrong-role' };
+  assert.deepEqual(plain(profilePatch(landlord, draft)), { locationsCovered: ['Edinburgh'], registrationNumbers: ['test-one', 'test-two'] });
+  assert.throws(() => profilePatch(landlord, { ...profileDraft(landlord), lettingExperienceYears: '101' }), /0 to 100/);
+});
+
+function clientHarness() {
+  const requests = []; let authReads = 0; let signOuts = 0; let status = 200;
+  const supabase = { auth: { getSession: async () => { authReads++; return { data: { session: { access_token: 'test-token' } } }; }, signOut: async () => { signOuts++; } } };
+  const module = loadSource('../src/lib/api.ts', {
+    process: { env: { EXPO_PUBLIC_API_URL: 'https://api.test' } },
+    require: name => { assert.equal(name, './supabase'); return { supabase }; },
+    fetch: async (url, options) => {
+      requests.push({ path: new URL(url).pathname, search: new URL(url).search, ...options, body: options.body ? JSON.parse(options.body) : undefined });
+      return new Response(JSON.stringify(status === 200 ? {} : { message: ['Contract error'] }), { status });
+    },
+  });
+  return { ...module, requests, authReads: () => authReads, signOuts: () => signOuts, setStatus: value => { status = value; } };
+}
+test('Phase 1 routes use documented methods, bodies and authentication', async () => {
+  const h = clientHarness(); const a = h.api;
+  await a.getOwnProfile(); await a.updateOwnProfile({ personalStory: null }); await a.getProfilePreview();
+  await a.getPublicProfile('00000000-0000-4000-8000-000000000001'); await a.evidenceCatalogue();
+  await a.legalDocuments(); await a.getPrivacy(); await a.acceptTerms('v1'); await a.acknowledgeNotice('v1');
+  await a.setConsent('user_research', false, 'v1');
+  assert.deepEqual(h.requests.map(r => [r.method, r.path]), [
+    ['GET', '/me/profile'], ['PATCH', '/me/profile'], ['GET', '/me/profile/preview'],
+    ['GET', '/profiles/00000000-0000-4000-8000-000000000001'], ['GET', '/evidence/catalogue'],
+    ['GET', '/legal/documents'], ['GET', '/me/privacy'], ['POST', '/me/privacy/terms-acceptance'],
+    ['POST', '/me/privacy/notice-acknowledgement'], ['PUT', '/me/privacy/consents'],
+  ]);
+  assert.deepEqual(h.requests[1].body, { personalStory: null });
+  assert.deepEqual(h.requests[7].body, { termsVersion: 'v1', accepted: true });
+  assert.deepEqual(h.requests[8].body, { privacyNoticeVersion: 'v1', acknowledged: true });
+  assert.deepEqual(h.requests[9].body, { purpose: 'user_research', granted: false, privacyNoticeVersion: 'v1' });
+  assert.equal(h.authReads(), 9); assert.equal(h.requests[5].headers.Authorization, undefined);
+  assert.equal(h.requests[0].headers.Authorization, 'Bearer test-token');
+});
+test('failed writes reject; version conflicts retain status; only authenticated 401 signs out', async () => {
+  const h = clientHarness(); h.setStatus(409);
+  await assert.rejects(h.api.acceptTerms('old'), e => e instanceof h.ApiError && e.status === 409);
+  h.setStatus(400); await assert.rejects(h.api.updateOwnProfile({ bio: 'edit' }), e => e.status === 400);
+  h.setStatus(503); await assert.rejects(h.api.legalDocuments(), e => e.status === 503);
+  h.setStatus(401); await assert.rejects(h.api.legalDocuments()); assert.equal(h.signOuts(), 0);
+  await assert.rejects(h.api.getOwnProfile()); assert.equal(h.signOuts(), 1);
+});
+
+
+test('display cleanup hides validation markers without mutating stored data or form patches', () => {
+  const id = '12345678-1234-1234-1234-123456789abc';
+  const source = { ...renter, bio: `Synthetic Phase 1 connectivity test ${id}`, personalStory: `Synthetic renter: I care for shared spaces. Test ${id}` };
+  assert.equal(profileSummary(source.bio), '');
+  assert.equal(profileSummary(source.personalStory), 'I care for shared spaces.');
+  assert.equal(profileSummary('I work in software implementation and enjoy testing recipes.'), 'I work in software implementation and enjoy testing recipes.');
+  assert.equal(profileDraft(source).bio, source.bio);
+  assert.deepEqual(plain(profilePatch(source, profileDraft(source))), {});
+});
+
+test('Phase A client uses documented discovery, nested property and photo routes', async () => {
+  const h = clientHarness();
+  await h.api.discover('suggested');
+  await h.api.discover('all', 'cursor-test');
+  await h.api.getPublicLandlordProperties('landlord-test');
+  await h.api.getPublicLandlordProperty('landlord-test', 'property-test');
+  await h.api.getPublicPropertyPhoto('landlord-test', 'property-test', 'photo-test');
+  assert.deepEqual(h.requests.map(r => r.path), ['/discovery', '/discovery', '/landlords/landlord-test/properties', '/landlords/landlord-test/properties/property-test', '/landlords/landlord-test/properties/property-test/photos/photo-test/download']);
+  assert.ok(h.requests.every(r => r.method === 'GET' && r.headers.Authorization === 'Bearer test-token' && r.body === undefined));
+  assert.equal(h.authReads(), 5);
+  assert.equal(h.requests[0].search, '?mode=suggested&limit=20');
+  assert.equal(h.requests[1].search, '?mode=all&limit=20&after=cursor-test');
+});
+
+const { mergeDiscoveryPages } = loadSource('../src/lib/profiles.ts');
+const page = (ids, nextCursor = null) => ({ items: ids.map(id => ({ profile: { id }, reasons: [] })), nextCursor });
+const deferred = () => { let resolve, reject; const promise = new Promise((a, b) => { resolve = a; reject = b; }); return { promise, resolve, reject }; };
+const settle = () => new Promise(resolve => setImmediate(resolve));
+function queryHarness() {
+  const slots = []; let index = 0, focus, cleanup, pendingEffect;
+  const react = {
+    useRef(value) { const i = index++; slots[i] ??= { current: value }; return slots[i]; },
+    useState(value) { const i = index++; if (!(i in slots)) slots[i] = value; return [slots[i], next => { slots[i] = typeof next === 'function' ? next(slots[i]) : next; }]; },
+    useCallback(fn, deps) { const i = index++; if (!slots[i] || deps.some((d, n) => d !== slots[i].deps[n])) slots[i] = { fn, deps }; return slots[i].fn; },
+  };
+  const { useApiQuery } = loadSource('../src/lib/useApiQuery.ts', { Error, require(name) {
+    if (name === 'react') return react;
+    assert.equal(name, '@react-navigation/native');
+    return { useFocusEffect(callback) { if (callback !== focus) { focus = callback; pendingEffect = callback; } } };
+  } });
+  return { render(key, fetcher, pagination) { index = 0; const result = useApiQuery(key, fetcher, pagination); if (pendingEffect) { cleanup?.(); cleanup = pendingEffect(); pendingEffect = null; } return result; }, blur() { cleanup?.(); } };
+}
+test('discovery pagination continues empty candidate pages and deduplicates identities', async () => {
+  const h = queryHarness(); const first = async () => page([], 'candidate-1'); let calls = 0;
+  const options = { cursor: p => p.nextCursor, fetchNext: async () => { calls++; return calls === 1 ? page(['person-1'], 'candidate-2') : page(['person-1', 'person-2']); }, merge: mergeDiscoveryPages };
+  assert.equal(h.render('suggested', first, options).isLoading, true); await settle();
+  let q = h.render('suggested', first, options); assert.equal(q.data.nextCursor, 'candidate-1');
+  await q.loadMore(); q = h.render('suggested', first, options); await q.loadMore(); q = h.render('suggested', first, options);
+  assert.deepEqual(plain(q.data.items.map(x => x.profile.id)), ['person-1', 'person-2']);
+  assert.equal(q.data.nextCursor, null); await q.loadMore(); assert.equal(calls, 2);
+});
+test('pagination rejects duplicate loads, keeps errors honest and drops stale mode responses', async () => {
+  const h = queryHarness(); const first = async () => page(['person-1'], 'candidate-1'); const next = deferred(); let calls = 0;
+  const options = { cursor: p => p.nextCursor, fetchNext: () => { calls++; return next.promise; }, merge: mergeDiscoveryPages };
+  h.render('suggested', first, options); await settle();
+  let q = h.render('suggested', first, options); const loading = q.loadMore(); await q.loadMore(); assert.equal(calls, 1);
+  const all = async () => page(['explore-person']); assert.equal(h.render('all', all, options).data, undefined); await settle();
+  next.resolve(page(['stale-person'])); await loading;
+  q = h.render('all', all, options); assert.deepEqual(plain(q.data.items.map(x => x.profile.id)), ['explore-person']);
+  const failure = { ...options, fetchNext: async () => { throw new Error('Page failed'); } };
+  h.render('suggested-again', first, failure); await settle(); q = h.render('suggested-again', first, failure); await q.loadMore();
+  q = h.render('suggested-again', first, failure); assert.equal(q.moreError.message, 'Page failed'); assert.equal(q.data.items.length, 1);
+  await q.refresh(); q = h.render('suggested-again', first, failure); assert.equal(q.moreError, null);
+});
+test('refresh invalidates a pending page and blur invalidates initial reads', async () => {
+  const h = queryHarness(); let reads = 0; const first = async () => page([`read-${++reads}`], 'candidate'); const next = deferred();
+  const options = { cursor: p => p.nextCursor, fetchNext: () => next.promise, merge: mergeDiscoveryPages };
+  h.render('same', first, options); await settle(); let q = h.render('same', first, options);
+  const loading = q.loadMore(); await q.refresh(); next.resolve(page(['stale-page'])); await loading;
+  q = h.render('same', first, options); assert.deepEqual(plain(q.data.items.map(x => x.profile.id)), ['read-2']);
+  const late = deferred(); h.render('late', () => late.promise); h.blur(); late.resolve(page(['hidden-response'])); await settle();
+  assert.equal(h.render('late', () => late.promise).data, undefined);
+});
+
+
+test('Phase B uses exact person request payloads, filtered pages and explicit recipient actions', async () => {
+  const h = clientHarness();
+  await h.api.createConnection({ recipientId: 'recipient', introduction: 'A personal introduction' });
+  await h.api.listConnections({ direction: 'incoming' }, 'cursor');
+  await h.api.listConnections({ direction: 'outgoing' });
+  await h.api.listConnections({ status: 'accepted' });
+  await h.api.getConnection('connection');
+  for (const action of ['accept', 'decline', 'review-later']) await h.api.decideConnection('connection', action);
+  assert.deepEqual(h.requests[0].body, { recipientId: 'recipient', introduction: 'A personal introduction' });
+  assert.equal(h.requests[1].search, '?limit=20&direction=incoming&after=cursor');
+  assert.equal(h.requests[2].search, '?limit=20&direction=outgoing');
+  assert.equal(h.requests[3].search, '?limit=20&status=accepted');
+  assert.deepEqual(h.requests.slice(4).map(row => [row.method, row.path, row.body]), [['GET', '/connections/connection', undefined], ['POST', '/connections/connection/accept', undefined], ['POST', '/connections/connection/decline', undefined], ['POST', '/connections/connection/review-later', undefined]]);
+  assert.ok(h.requests.every(row => row.headers.Authorization === 'Bearer test-token'));
+});
+const { canDecideConnection, connectionIntroduction, connectionFilter, mergeConnectionPages } = loadSource('../src/lib/profiles.ts');
+test('only the true recipient can decide outstanding person requests', () => {
+  const request = { id: 'c', senderId: 'sender', recipientId: 'recipient', direction: 'incoming', status: 'pending' };
+  assert.equal(canDecideConnection(request, 'recipient'), true);
+  for (const user of ['sender', 'outsider', undefined]) assert.equal(canDecideConnection(request, user), false);
+  for (const status of ['accepted', 'declined']) assert.equal(canDecideConnection({ ...request, status }, 'recipient'), false);
+  assert.equal(canDecideConnection({ ...request, status: 'review_later' }, 'recipient'), true);
+  assert.equal(canDecideConnection({ ...request, direction: 'outgoing' }, 'recipient'), false);
+  assert.equal(canDecideConnection({ ...request, senderId: 'recipient' }, 'recipient'), false);
+});
+test('notes remain person introductions and include optional mentions within the server limit', () => {
+  assert.equal(connectionIntroduction(' Hello ', ' Edinburgh flat '), 'Hello\n\nProperty mention: Edinburgh flat');
+  assert.equal(connectionIntroduction('Hello', '  '), 'Hello');
+  assert.throws(() => connectionIntroduction(' ', 'Only a property'), /personalised/);
+  assert.equal(connectionIntroduction('a'.repeat(3000), '').length, 3000);
+  assert.throws(() => connectionIntroduction('a'.repeat(3000), 'Property'), /3,000/);
+});
+test('direction lists retain all states and accepted lists use the server status filter', () => {
+  assert.deepEqual(plain(connectionFilter('Incoming')), { direction: 'incoming' });
+  assert.deepEqual(plain(connectionFilter('Outgoing')), { direction: 'outgoing' });
+  assert.deepEqual(plain(connectionFilter('Accepted')), { status: 'accepted' });
+  const result = mergeConnectionPages({ items: [{ id: 'a', status: 'pending' }], nextCursor: 'first' }, { items: [{ id: 'a', status: 'review_later' }, { id: 'b', status: 'declined' }], nextCursor: null });
+  assert.deepEqual(plain(result), { items: [{ id: 'a', status: 'review_later' }, { id: 'b', status: 'declined' }], nextCursor: null });
+});
+test('Phase B failures reject without manufacturing sent or accepted responses', async () => {
+  for (const status of [400, 403, 404, 409]) {
+    const h = clientHarness(); h.setStatus(status);
+    await assert.rejects(h.api.createConnection({ recipientId: 'recipient', introduction: 'Hello' }), error => error.status === status);
+    await assert.rejects(h.api.decideConnection('c', 'accept'), error => error.status === status);
+  }
+});
+
+const { canMessageConnection, mergeMessagePages } = loadSource('../src/lib/profiles.ts');
+test('messaging admits only accepted participants with the confirmed conversation identity', () => {
+  const connection = { id: 'c', conversationId: 'c', senderId: 'a', recipientId: 'b', status: 'accepted' };
+  for (const user of ['a', 'b']) assert.equal(canMessageConnection(connection, user), true);
+  for (const user of ['outsider', undefined]) assert.equal(canMessageConnection(connection, user), false);
+  for (const status of ['pending', 'review_later', 'declined']) assert.equal(canMessageConnection({ ...connection, status }, 'a'), false);
+  for (const conversationId of [null, 'other']) assert.equal(canMessageConnection({ ...connection, conversationId }, 'a'), false);
+});
+test('message pagination deduplicates and preserves 18-digit cursors without numeric rounding', () => {
+  const message = (id, cursor) => ({ id, cursor });
+  const page = mergeMessagePages({ items: [message('b', '999999999999999998'), message('a', '9')], nextCursor: '9' },
+    { items: [message('c', '999999999999999999'), message('b', '999999999999999998')], nextCursor: null });
+  assert.deepEqual(plain(page.items.map(m => m.id)), ['a', 'b', 'c']);
+  assert.equal(page.items[2].cursor, '999999999999999999'); assert.equal(page.nextCursor, null);
+});
+test('Phase C transport follows exact message routes, cursor query and plain text payload', async () => {
+  const h = clientHarness();
+  await h.api.listMessages('connection'); await h.api.listMessages('connection', '999999999999999998');
+  await h.api.sendMessage('connection', 'Hello');
+  assert.deepEqual(h.requests.map(r => [r.method, r.path, r.search, r.body]), [
+    ['GET', '/connections/connection/messages', '?limit=50', undefined],
+    ['GET', '/connections/connection/messages', '?limit=50&after=999999999999999998', undefined],
+    ['POST', '/connections/connection/messages', '', { text: 'Hello' }],
+  ]);
+  for (const status of [403, 404, 409, 500]) { h.setStatus(status); await assert.rejects(h.api.sendMessage('connection', 'Kept draft'), e => e.status === status); }
+});
+
+test('landlord public presentation omits empty optional sections and never renders private fields', () => {
+  const source = fs.readFileSync(new URL('../src/screens/discover/LandlordProfileScreen.tsx', import.meta.url), 'utf8');
+  const compiled = ts.transpileModule(source, { fileName: 'LandlordProfileScreen.tsx', compilerOptions: {
+    module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX,
+  } }).outputText;
+  const exports = {};
+  const jsx = (type, props) => typeof type === 'function' ? type(props) : { type, props };
+  const element = ({ title, children }) => [title, children];
+  vm.runInNewContext(compiled, { exports, require: name => {
+    if (name === 'react/jsx-runtime') return { jsx, jsxs: jsx };
+    if (name === 'react-native') return { Image: 'Image', Text: 'Text', View: 'View' };
+    if (name.endsWith('/profiles')) return { profileSummary };
+    if (name.endsWith('/trustPillars')) return { TRUST_PILLARS: [] };
+    if (name.endsWith('/StatusBadge')) return { StatusBadge: ({ label }) => label, ProfileVerification: () => 'server verification' };
+    if (name.endsWith('/ScreenContainer')) return { screenStyles: {} };
+    return { Card: element, Button: ({ label }) => label };
+  } });
+  const text = tree => tree == null ? '' : Array.isArray(tree) ? tree.map(text).join(' ') : typeof tree === 'object' ? text(tree.props?.children) : String(tree);
+  const profile = { kind: 'landlord', displayName: 'Alex', bio: '', companyName: null, landlordType: null,
+    communicationStyle: null, lettingApproach: null, tenantExpectations: null, tenancySuccess: null,
+    lettingExperienceYears: 0, numberOfProperties: 0, locationsCovered: [], properties: [],
+    verification: {}, arcsPreferences: null,
+    registrationNumbers: ['PRIVATE-REGISTRATION'], registrationDetails: 'PRIVATE-DETAILS', evidence: 'PRIVATE-EVIDENCE' };
+  const empty = text(exports.LandlordPublicProfileContent({ profile, label: 'Saved public preview' }));
+  assert.doesNotMatch(empty, /Not provided|PRIVATE-|Getting to know me|How I communicate|Request to Connect/);
+  assert.match(empty, /0\s+years/);
+  assert.match(empty, /0\s+properties/);
+  const populated = text(exports.LandlordPublicProfileContent({ profile: { ...profile, communicationStyle: 'I listen first.' } }));
+  assert.match(populated, /How I communicate/);
+  assert.match(populated, /I listen first/);
+  assert.match(populated, /Request to Connect/);
+});
+
+test('routed landlord editors retain every field and keep registration out of About Me; renter fields remain available', () => {
+  let activeProfile;
+  const jsx = (type, props) => typeof type === 'function' ? type(props) : { type, props };
+  const compiled = ts.transpileModule(fs.readFileSync(new URL('../src/components/ProfileEditor.tsx', import.meta.url), 'utf8'), {
+    fileName: 'ProfileEditor.tsx', compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX },
+  }).outputText;
+  const exports = {};
+  const { profileFields } = loadSource('../src/lib/profiles.ts');
+  vm.runInNewContext(compiled, { exports, require: name => {
+    if (name === 'react/jsx-runtime') return { jsx, jsxs: jsx };
+    if (name === 'react') return { useState: value => [typeof value === 'function' ? value() : value, () => {}], useEffect: () => {} };
+    if (name === '@react-navigation/native') return { useNavigation: () => ({}), usePreventRemove: () => {} };
+    if (name === 'react-native') return { Image: 'Image', Text: 'Text', View: 'View' };
+    if (name.endsWith('/ProfileProvider')) return { useProfile: () => ({ profile: activeProfile }) };
+    if (name.endsWith('/profiles')) return { profileDraft, profilePatch, profileFields, profileSummary };
+    if (name.endsWith('/ScreenContainer')) return { screenStyles: {} };
+    return { FormInput: ({ label }) => ({ field: label }), Card: ({ children }) => children,
+      Button: () => null, StatusBadge: () => null, SelectionOption: () => null };
+  } });
+  const fields = tree => tree == null ? [] : Array.isArray(tree) ? tree.flatMap(fields) : typeof tree === 'object'
+    ? tree.field ? [tree.field] : fields(tree.props?.children) : [];
+  activeProfile = { kind: 'landlord', discoverable: false, landlordType: null, displayName: 'Alex' };
+  const about = fields(exports.ProfileEditor({ role: 'landlord', routed: true, initialSection: 'about' }));
+  const business = fields(exports.ProfileEditor({ role: 'landlord', routed: true, initialSection: 'business' }));
+  assert.equal(about.length + business.length, profileFields('landlord').length);
+  assert.deepEqual([...about, ...business].sort(), Array.from(profileFields('landlord'), field => field.label).sort());
+  assert.ok(business.includes('Scottish landlord registration numbers (private, one per line)'));
+  assert.ok(!about.some(label => /registration/i.test(label)));
+  activeProfile = renter;
+  const renterFields = ['about', 'housing'].flatMap(initialSection => fields(exports.ProfileEditor({ role: 'renter', routed: true, initialSection })));
+  assert.deepEqual(renterFields.sort(), Array.from(profileFields('renter'), field => field.label).sort());
+});
+
+test('both Profile homes share the grouped dashboard and retain their five existing destinations', () => {
+  const jsx = (type, props) => typeof type === 'function' ? type(props) : { type, props };
+  for (const [role, exportName, destinations] of [
+    ['renter', 'RenterProfileScreen', ['AboutMe', 'HousingPreferences', 'Evidence', 'VerificationStatus', 'PublicProfilePreview']],
+    ['landlord', 'LandlordProfileScreen', ['LandlordAbout', 'LandlordBusiness', 'LandlordArcs', 'LandlordVerification', 'LandlordPreview']],
+  ]) {
+    const exports = {};
+    const source = fs.readFileSync(new URL(`../src/screens/${role}/profile/${exportName}.tsx`, import.meta.url), 'utf8');
+    const compiled = ts.transpileModule(source, { fileName: `${exportName}.tsx`, compilerOptions: {
+      module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX,
+    } }).outputText;
+    vm.runInNewContext(compiled, { exports, require: name => {
+      if (name === 'react/jsx-runtime') return { jsx, jsxs: jsx };
+      if (name === 'react-native') return { StyleSheet: { create: value => value } };
+      if (name.endsWith('/ProfileProvider')) return { useProfile: () => ({ profile: { ...renter, kind: role } }) };
+      if (name.endsWith('/profiles')) return { profileSummary };
+      if (name.endsWith('/AccountProfileScreen')) return { AccountProfileScreen: props => props };
+      if (name.endsWith('/colors')) return { colors: {} };
+      return {};
+    } });
+    const visited = [];
+    const dashboard = exports[exportName]({ navigation: { navigate: route => visited.push(route) } });
+    assert.equal(dashboard.dashboard, true);
+    assert.equal(dashboard.focused, true);
+    assert.equal(dashboard.menuItems.length, 5);
+    assert.equal(dashboard.menuItems[4].label, 'Preview my public profile');
+    dashboard.menuItems.forEach(item => { assert.ok(item.icon && item.detail); item.onPress(); });
+    assert.deepEqual(visited, destinations);
+  }
+});
+
+test('shared Profile dashboards hide account email while Settings retains it', () => {
+  const jsx = (type, props) => typeof type === 'function' ? type(props) : { type, props };
+  const exports = {};
+  const compiled = ts.transpileModule(fs.readFileSync(new URL('../src/components/AccountProfileScreen.tsx', import.meta.url), 'utf8'), {
+    fileName: 'AccountProfileScreen.tsx', compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX },
+  }).outputText;
+  vm.runInNewContext(compiled, { exports, require: name => {
+    if (name === 'react/jsx-runtime') return { jsx, jsxs: jsx };
+    if (name === 'react') return { useState: value => [value, () => {}] };
+    if (name === 'react-native') return { Image: 'Image', Text: 'Text', View: 'View', Pressable: 'Pressable', StyleSheet: { create: value => value } };
+    if (name.endsWith('/AuthProvider')) return { useAuth: () => ({ user: { email: 'PRIVATE-ACCOUNT-EMAIL' }, displayName: 'Alex' }) };
+    if (name.endsWith('/ProfileProvider')) return { useProfile: () => ({ profile: null, isLoading: false }) };
+    if (name.endsWith('/profiles')) return { profileSummary };
+    if (name.endsWith('/ScreenContainer')) return { ScreenContainer: ({ children }) => children };
+    if (name.endsWith('/LegalPreferences')) return { LegalPreferences: () => 'Existing legal content' };
+    return { Ionicons: () => null, colors: {} };
+  } });
+  const text = tree => tree == null ? '' : Array.isArray(tree) ? tree.map(text).join(' ') : typeof tree === 'object' ? text(tree.props?.children) : String(tree);
+  for (const roleLabel of ['Renter', 'Landlord']) {
+    assert.doesNotMatch(text(exports.AccountProfileScreen({ roleLabel, focused: true, dashboard: true })), /PRIVATE-ACCOUNT-EMAIL/);
+    assert.match(text(exports.AccountProfileScreen({ roleLabel, focused: true, settingsOnly: true })), /PRIVATE-ACCOUNT-EMAIL/);
+  }
+});
+
+// Legal UI stays read-only until an explicit required acknowledgement.
+function legalPresentationHarness({ conflict = false, unavailable = false } = {}) {
+  const slots = []; let index = 0; const writes = [], reloads = [];
+  const docs = { terms: { id: 'terms', kind: 'terms', title: 'Lérí terms', version: 'terms-v2', publishedAt: '2026-10-28', content: 'PLATFORM TERMS', demoOnly: true },
+    privacyNotice: { id: 'notice', kind: 'privacy_notice', title: 'Lérí privacy notice', version: 'notice-v3', publishedAt: '2026-10-28', content: 'PLATFORM NOTICE', demoOnly: true } };
+  const documents = { data: docs, error: null, reload: async () => reloads.push('documents') };
+  const privacy = { data: unavailable ? null : { termsAcceptances: [], privacyAcknowledgements: [], consents: [{ purpose: 'product_updates', granted: false }] }, error: null, reload: async () => reloads.push('privacy') };
+  class LegalError extends Error { constructor(status) { super('Version changed'); this.status = status; } }
+  const write = async (action, version) => { writes.push([action, version]); if (conflict) throw new LegalError(409); return { version }; };
+  const jsx = (type, props) => typeof type === 'function' ? type(props) : { type, props };
+  const exports = {};
+  const compiled = ts.transpileModule(fs.readFileSync(new URL('../src/components/LegalPreferences.tsx', import.meta.url), 'utf8'), {
+    fileName: 'LegalPreferences.tsx', compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX },
+  }).outputText;
+  vm.runInNewContext(compiled, { exports, Date, require(name) {
+    if (name === 'react/jsx-runtime') return { jsx, jsxs: jsx };
+    if (name === 'react') return { useState(initial) { const i = index++; if (!(i in slots)) slots[i] = initial;
+      return [slots[i], value => { slots[i] = typeof value === 'function' ? value(slots[i]) : value; }]; } };
+    if (name === 'react-native') return { Text: 'Text', View: 'View' };
+    if (name.endsWith('/AuthProvider')) return { useAuth: () => ({ user: { id: 'existing-account' } }) };
+    if (name.endsWith('/useApiQuery')) return { useApiQuery: key => key === 'legal/documents' ? documents : privacy };
+    if (name.endsWith('/api')) return { ApiError: LegalError, api: { acceptTerms: version => write('terms', version), acknowledgeNotice: version => write('notice', version), setConsent: () => { throw Error('Optional consent must never be written'); } } };
+    if (name.endsWith('/Card')) return { Card: ({ title, children }) => [title, children] };
+    if (name.endsWith('/ScreenContainer')) return { screenStyles: {} };
+    return { Button: 'Button', StatusBadge: ({ label }) => label, ErrorState: 'ErrorState', LoadingState: 'LoadingState' };
+  } });
+  function nodes(tree) { return tree == null ? [] : Array.isArray(tree) ? tree.flatMap(nodes) : typeof tree === 'object' ? [tree, ...nodes(tree.props?.children)] : []; }
+  const render = () => { index = 0; return exports.LegalPreferences(); };
+  const button = label => nodes(render()).find(node => node.props?.label === label);
+  const text = tree => tree == null ? '' : Array.isArray(tree) ? tree.map(text).join(' ') : typeof tree === 'object' ? text(tree.props?.children) : String(tree);
+  return { render, button, text, writes, reloads };
+}
+test('simplified legal UI never changes optional consent and preserves explicit versioned required acknowledgements', async () => {
+  const h = legalPresentationHarness();
+  assert.doesNotMatch(h.text(h.render()), /Optional consent|Product updates|User research|Grant optional/i);
+  assert.match(h.text(h.render()), /both renters and landlords/);
+  assert.match(h.text(h.render()), /Demo-only legal document/);
+  assert.deepEqual(h.writes, []);
+  h.button('Read terms').props.onPress();
+  assert.match(h.text(h.render()), /PLATFORM TERMS/); assert.deepEqual(h.writes, []);
+  h.button('Accept these terms').props.onPress(); await new Promise(resolve => setImmediate(resolve));
+  h.button('Read privacy notice').props.onPress();
+  assert.match(h.text(h.render()), /PLATFORM NOTICE/);
+  h.button('Acknowledge this privacy notice').props.onPress(); await new Promise(resolve => setImmediate(resolve));
+  assert.deepEqual(h.writes, [['terms', 'terms-v2'], ['notice', 'notice-v3']]);
+});
+test('legal acknowledgements remain blocked without privacy state and recover safely from changed document versions', async () => {
+  const unavailable = legalPresentationHarness({ unavailable: true });
+  unavailable.button('Read terms').props.onPress();
+  assert.equal(unavailable.button('Accept these terms').props.disabled, true);
+  const h = legalPresentationHarness({ conflict: true });
+  h.button('Read terms').props.onPress(); h.button('Accept these terms').props.onPress();
+  await new Promise(resolve => setImmediate(resolve));
+  assert.match(h.text(h.render()), /Review the latest versions/);
+  assert.doesNotMatch(h.text(h.render()), /Terms terms-v2 accepted/);
+  assert.deepEqual(h.reloads, ['documents', 'privacy']);
+});
+
+test('compact renter compatibility uses only supplied API reasons and makes no claim without evidence', () => {
+  const { discoveryCompatibilitySentence } = loadSource('../src/lib/profiles.ts');
+  assert.equal(discoveryCompatibilitySentence([]), null);
+  assert.equal(discoveryCompatibilitySentence(['', '   ']), null);
+  assert.equal(discoveryCompatibilitySentence(['In the renter’s preferred area', 'Rent fits the stated budget']),
+    'Suggested because the area and rent align with this renter’s preferences.');
+  assert.equal(discoveryCompatibilitySentence(['Rent fits the stated budget']), 'Rent fits the stated budget.');
+  assert.equal(discoveryCompatibilitySentence(['A distinct API reason', 'Another API reason']), 'A distinct API reason.');
+  assert.equal(discoveryCompatibilitySentence(['Already a sentence.']), 'Already a sentence.');
+});
