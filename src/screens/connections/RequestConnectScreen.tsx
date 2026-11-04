@@ -65,7 +65,7 @@ export function RequestConnectScreen({ route, navigation }: Props) {
     {!own.isLoading && !own.profile?.discoverable ? <Text style={styles.body}>Make your profile discoverable in Edit Profile before sending an introduction.</Text> : null}
     <Text style={styles.body}>What caught your attention? Tell them a little about yourself and why you’d like to connect.</Text>
     <FormInput label="Your personalised note" multiline maxLength={3000} value={note} editable={!busy}
-      onChangeText={value => { setNote(value); setReviewed(null); }} placeholder="Introduce yourself in your own words" />
+      onChangeText={value => { setNote(value); setReviewed(null); }} placeholder="Hi, I’m Lewis. I’d love to chat about your one-bedroom home in the West End. It looks like an ideal fit for the next year—and hopefully longer." />
     <FormInput label="Property mention (optional)" value={mention} maxLength={200} editable={!busy}
       onChangeText={value => { setMention(value); setReviewed(null); }} placeholder="Mention a property if you wish" />
     <Text style={styles.note}>This introduction is to a person, not a property application. The complete note may contain up to 3,000 characters.</Text>

@@ -11,6 +11,7 @@ import {
   formatBedrooms,
   formatRent,
   propertyName,
+  propertyLocation,
 } from '../../../lib/properties';
 import { useApiQuery } from '../../../lib/useApiQuery';
 import type { LandlordPropertiesStackParamList } from '../../../navigation/landlord/LandlordPropertiesStack';
@@ -48,10 +49,10 @@ export function PropertyDetailScreen({ navigation, route }: Props) {
 
   return (
     <ScreenContainer>
-      <Text style={styles.reference}>{STATUS_COPY[property.status]}</Text>
+      {property.status !== 'draft' ? <Text style={styles.reference}>{STATUS_COPY[property.status]}</Text> : null}
       <Text style={styles.title}>{propertyName(property)}</Text>
       <Text style={styles.subtitle}>
-        {property.addressLine1}, {property.city} {property.postcode}
+        {propertyLocation(property)}
         {'\n'}
         {formatBedrooms(property.bedrooms)} · {formatRent(property.rentAmount, property.currency)}
       </Text>

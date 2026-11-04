@@ -33,8 +33,8 @@ export function EvidenceDashboardScreen({ navigation }: Props) {
             </View>
             <View style={styles.rowText}>
               <Text style={styles.pillarLabel}>{pillar.label}</Text>
-              <Text style={styles.pillarStatus}>Account evidence not connected</Text>
-              {catalogue.data && !catalogue.error ? <Text style={styles.pillarStatus}>{catalogue.data.filter((option) => option.pillar === pillar.id).length} optional catalogue choices</Text> : null}
+              <Text style={styles.pillarStatus}>Saving evidence is not available yet</Text>
+              {catalogue.data && !catalogue.error ? <Text style={styles.pillarStatus}>{catalogue.data.filter((option) => option.pillar === pillar.id).length} optional evidence types</Text> : null}
             </View>
             <Ionicons color={colors.textMuted} name="chevron-forward" size={18} />
           </Card>

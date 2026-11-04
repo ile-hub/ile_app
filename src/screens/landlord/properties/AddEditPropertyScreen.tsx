@@ -226,7 +226,8 @@ export function AddEditPropertyScreen({ navigation, route }: Props) {
         </View>
       </View>
 
-      <Text style={styles.sectionTitle}>Property rules</Text>
+      <Text style={styles.sectionTitle}>Practical details to discuss</Text>
+      <Text style={{ color: colors.textSecondary, fontSize: 14, lineHeight: 21, marginBottom: 12 }}>Share relevant details about the home. These choices do not replace getting to know a renter or considering their circumstances.</Text>
       <View style={styles.chipRow}>
         {PROPERTY_RULE_OPTIONS.map((rule) => {
           const selected = rules.includes(rule);

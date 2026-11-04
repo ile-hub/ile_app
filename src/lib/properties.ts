@@ -33,8 +33,16 @@ export function propertyName(property: Pick<Property, 'addressLine1'> & { title?
 export function propertySummaryLine(
   property: Pick<TenancyInterestPropertySummary, 'city' | 'bedrooms' | 'rentAmount' | 'currency'>,
 ) {
-  return `${property.city} · ${formatBedrooms(property.bedrooms)} · ${formatRent(
+  return `${property.city.replace(/^demo\s+/i, '')} · ${formatBedrooms(property.bedrooms)} · ${formatRent(
     property.rentAmount,
     property.currency,
   )}`;
+}
+
+// Keep fixture address markers out of property presentation.
+export function propertyLocation(property: Pick<Property, 'addressLine1' | 'city' | 'postcode'>) {
+  const address = /^synthetic placeholder\s*[-–—]\s*not an address$/i.test(property.addressLine1.trim()) ? '' : property.addressLine1;
+  const city = property.city.replace(/^demo\s+/i, '');
+  const postcode = /^demo$/i.test(property.postcode.trim()) ? '' : property.postcode;
+  return [address, [city, postcode].filter(Boolean).join(' ')].filter(Boolean).join(', ');
 }

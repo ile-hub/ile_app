@@ -249,7 +249,7 @@ test('landlord public presentation omits empty optional sections and never rende
   } }).outputText;
   const exports = {};
   const jsx = (type, props) => typeof type === 'function' ? type(props) : { type, props };
-  const element = ({ children }) => children;
+  const element = ({ title, children }) => [title, children];
   vm.runInNewContext(compiled, { exports, require: name => {
     if (name === 'react/jsx-runtime') return { jsx, jsxs: jsx };
     if (name === 'react-native') return { Image: 'Image', Text: 'Text', View: 'View' };
@@ -270,7 +270,7 @@ test('landlord public presentation omits empty optional sections and never rende
   assert.match(empty, /0\s+years/);
   assert.match(empty, /0\s+properties/);
   const populated = text(exports.LandlordPublicProfileContent({ profile: { ...profile, communicationStyle: 'I listen first.' } }));
-  assert.match(populated, /Getting to know me/);
+  assert.match(populated, /How I communicate/);
   assert.match(populated, /I listen first/);
   assert.match(populated, /Request to Connect/);
 });
@@ -361,4 +361,73 @@ test('shared Profile dashboards hide account email while Settings retains it', (
     assert.doesNotMatch(text(exports.AccountProfileScreen({ roleLabel, focused: true, dashboard: true })), /PRIVATE-ACCOUNT-EMAIL/);
     assert.match(text(exports.AccountProfileScreen({ roleLabel, focused: true, settingsOnly: true })), /PRIVATE-ACCOUNT-EMAIL/);
   }
+});
+
+// Legal UI stays read-only until an explicit required acknowledgement.
+function legalPresentationHarness({ conflict = false, unavailable = false } = {}) {
+  const slots = []; let index = 0; const writes = [], reloads = [];
+  const docs = { terms: { id: 'terms', kind: 'terms', title: 'Lérí terms', version: 'terms-v2', publishedAt: '2026-10-28', content: 'PLATFORM TERMS', demoOnly: true },
+    privacyNotice: { id: 'notice', kind: 'privacy_notice', title: 'Lérí privacy notice', version: 'notice-v3', publishedAt: '2026-10-28', content: 'PLATFORM NOTICE', demoOnly: true } };
+  const documents = { data: docs, error: null, reload: async () => reloads.push('documents') };
+  const privacy = { data: unavailable ? null : { termsAcceptances: [], privacyAcknowledgements: [], consents: [{ purpose: 'product_updates', granted: false }] }, error: null, reload: async () => reloads.push('privacy') };
+  class LegalError extends Error { constructor(status) { super('Version changed'); this.status = status; } }
+  const write = async (action, version) => { writes.push([action, version]); if (conflict) throw new LegalError(409); return { version }; };
+  const jsx = (type, props) => typeof type === 'function' ? type(props) : { type, props };
+  const exports = {};
+  const compiled = ts.transpileModule(fs.readFileSync(new URL('../src/components/LegalPreferences.tsx', import.meta.url), 'utf8'), {
+    fileName: 'LegalPreferences.tsx', compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX },
+  }).outputText;
+  vm.runInNewContext(compiled, { exports, Date, require(name) {
+    if (name === 'react/jsx-runtime') return { jsx, jsxs: jsx };
+    if (name === 'react') return { useState(initial) { const i = index++; if (!(i in slots)) slots[i] = initial;
+      return [slots[i], value => { slots[i] = typeof value === 'function' ? value(slots[i]) : value; }]; } };
+    if (name === 'react-native') return { Text: 'Text', View: 'View' };
+    if (name.endsWith('/AuthProvider')) return { useAuth: () => ({ user: { id: 'existing-account' } }) };
+    if (name.endsWith('/useApiQuery')) return { useApiQuery: key => key === 'legal/documents' ? documents : privacy };
+    if (name.endsWith('/api')) return { ApiError: LegalError, api: { acceptTerms: version => write('terms', version), acknowledgeNotice: version => write('notice', version), setConsent: () => { throw Error('Optional consent must never be written'); } } };
+    if (name.endsWith('/Card')) return { Card: ({ title, children }) => [title, children] };
+    if (name.endsWith('/ScreenContainer')) return { screenStyles: {} };
+    return { Button: 'Button', StatusBadge: ({ label }) => label, ErrorState: 'ErrorState', LoadingState: 'LoadingState' };
+  } });
+  function nodes(tree) { return tree == null ? [] : Array.isArray(tree) ? tree.flatMap(nodes) : typeof tree === 'object' ? [tree, ...nodes(tree.props?.children)] : []; }
+  const render = () => { index = 0; return exports.LegalPreferences(); };
+  const button = label => nodes(render()).find(node => node.props?.label === label);
+  const text = tree => tree == null ? '' : Array.isArray(tree) ? tree.map(text).join(' ') : typeof tree === 'object' ? text(tree.props?.children) : String(tree);
+  return { render, button, text, writes, reloads };
+}
+test('simplified legal UI never changes optional consent and preserves explicit versioned required acknowledgements', async () => {
+  const h = legalPresentationHarness();
+  assert.doesNotMatch(h.text(h.render()), /Optional consent|Product updates|User research|Grant optional/i);
+  assert.match(h.text(h.render()), /both renters and landlords/);
+  assert.match(h.text(h.render()), /Demo-only legal document/);
+  assert.deepEqual(h.writes, []);
+  h.button('Read terms').props.onPress();
+  assert.match(h.text(h.render()), /PLATFORM TERMS/); assert.deepEqual(h.writes, []);
+  h.button('Accept these terms').props.onPress(); await new Promise(resolve => setImmediate(resolve));
+  h.button('Read privacy notice').props.onPress();
+  assert.match(h.text(h.render()), /PLATFORM NOTICE/);
+  h.button('Acknowledge this privacy notice').props.onPress(); await new Promise(resolve => setImmediate(resolve));
+  assert.deepEqual(h.writes, [['terms', 'terms-v2'], ['notice', 'notice-v3']]);
+});
+test('legal acknowledgements remain blocked without privacy state and recover safely from changed document versions', async () => {
+  const unavailable = legalPresentationHarness({ unavailable: true });
+  unavailable.button('Read terms').props.onPress();
+  assert.equal(unavailable.button('Accept these terms').props.disabled, true);
+  const h = legalPresentationHarness({ conflict: true });
+  h.button('Read terms').props.onPress(); h.button('Accept these terms').props.onPress();
+  await new Promise(resolve => setImmediate(resolve));
+  assert.match(h.text(h.render()), /Review the latest versions/);
+  assert.doesNotMatch(h.text(h.render()), /Terms terms-v2 accepted/);
+  assert.deepEqual(h.reloads, ['documents', 'privacy']);
+});
+
+test('compact renter compatibility uses only supplied API reasons and makes no claim without evidence', () => {
+  const { discoveryCompatibilitySentence } = loadSource('../src/lib/profiles.ts');
+  assert.equal(discoveryCompatibilitySentence([]), null);
+  assert.equal(discoveryCompatibilitySentence(['', '   ']), null);
+  assert.equal(discoveryCompatibilitySentence(['In the renter’s preferred area', 'Rent fits the stated budget']),
+    'Suggested because the area and rent align with this renter’s preferences.');
+  assert.equal(discoveryCompatibilitySentence(['Rent fits the stated budget']), 'Rent fits the stated budget.');
+  assert.equal(discoveryCompatibilitySentence(['A distinct API reason', 'Another API reason']), 'A distinct API reason.');
+  assert.equal(discoveryCompatibilitySentence(['Already a sentence.']), 'Already a sentence.');
 });

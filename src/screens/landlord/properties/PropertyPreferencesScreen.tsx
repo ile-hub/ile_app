@@ -18,9 +18,9 @@ function PropertyPreferencesDraft() {
   const [date, setDate] = useState('');
   const [duration, setDuration] = useState('');
   return <ScreenContainer><View style={styles.content}>
-    <StatusBadge label="Unsaved property preference draft" tone="highlight" />
+    <StatusBadge label="Explore property preferences" tone="highlight" />
     <Text style={styles.heading}>Factual tenancy requirements</Text>
-    <Text style={styles.note}>Rent and property rules remain in Edit details. These draft constraints are separate from ARCS evidence preferences and are not saved or applied.</Text>
+    <Text style={styles.note}>Save practical property details in Edit details. Choices on this screen are not saved or applied.</Text>
     <FormInput label="Permitted occupants" keyboardType="number-pad" value={occupants} onChangeText={setOccupants} />
     <FormInput label="Available move date (YYYY-MM-DD)" value={date} onChangeText={setDate} />
     <FormInput label="Minimum / expected tenancy duration" value={duration} onChangeText={setDuration} />
@@ -29,7 +29,7 @@ function PropertyPreferencesDraft() {
       accessibilityState={{ selected: !custom }} onPress={() => setCustom(false)} />
     <Button label="Customise for this property" variant={custom ? 'primary' : 'secondary'}
       accessibilityState={{ selected: custom }} onPress={() => setCustom(true)} />
-    {custom ? <ArcsPreferences scope="property" /> : <Text style={styles.body}>Saved landlord defaults are unavailable until integration. Your draft choice is not applied.</Text>}
+    {custom ? <ArcsPreferences scope="property" /> : <Text style={styles.body}>Using saved defaults is not available here yet. This choice is not saved or applied.</Text>}
     <Button disabled label="Save property preferences unavailable" />
   </View></ScreenContainer>;
 }

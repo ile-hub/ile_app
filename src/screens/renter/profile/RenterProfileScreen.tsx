@@ -39,13 +39,12 @@ export function RenterSettingsScreen() {
     finally { setBusy(false); }
   }
   return <ScreenContainer><View style={screenStyles.content}>
-    <Card><Text style={styles.rowTitle}>Your account</Text><Text selectable style={styles.detail}>{user?.email}</Text></Card>
+    <Card title="Your account"><Text selectable style={styles.detail}>{user?.email}</Text></Card>
     <LegalPreferences />
     {error ? <Text accessibilityRole="alert" style={screenStyles.body}>{error}</Text> : null}
     <Button label="Log out" variant="secondary" loading={busy} disabled={busy} onPress={() => void logout()} />
   </View></ScreenContainer>;
 }
 const styles = StyleSheet.create({
-  rowTitle: { color: colors.textPrimary, fontSize: 16, fontWeight: '700' },
   detail: { color: colors.textSecondary, fontSize: 13, lineHeight: 20 },
 });

@@ -89,6 +89,17 @@ export function profilePatch(profile: OwnProfile, draft: Record<string, string>)
 }
 
 // Presentation only: never use this value to hydrate forms or construct patches.
+// Presentation only: summarize confirmed API reasons, never infer a match from profile fields.
+export function discoveryCompatibilitySentence(reasons: string[]): string | null {
+  const supplied = reasons.map(reason => reason.trim()).filter(Boolean);
+  if (!supplied.length) return null;
+  if (supplied.includes('In the renter’s preferred area') && supplied.includes('Rent fits the stated budget')) {
+    return 'Suggested because the area and rent align with this renter’s preferences.';
+  }
+  const reason = supplied[0];
+  return /[.!?]$/.test(reason) ? reason : `${reason}.`;
+}
+
 export function profileSummary(value: string | null | undefined): string {
   return (value ?? '')
     .replace(/\bSynthetic Frontend Phase 1 Renter\b/gi, 'Demo renter')

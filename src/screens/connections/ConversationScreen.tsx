@@ -1,9 +1,10 @@
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, FlatList, Image, Keyboard, KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, FlatList, Keyboard, KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../auth/AuthProvider';
+import { ProfilePortrait } from '../../components/ProfilePortrait';
 import { Button } from '../../components/Button';
 import { ContentStateView, ErrorState, LoadingState } from '../../components/QueryState';
 import { api, ApiError } from '../../lib/api';
@@ -38,7 +39,6 @@ function ConversationContent({ connectionId, onBack }: { connectionId: string; o
   const nearBottom = useRef(true);
   const insets = useSafeAreaInsets();
   const [keyboardOpen, setKeyboardOpen] = useState(false);
-  const [failedPhoto, setFailedPhoto] = useState<string | null>(null);
   useEffect(() => {
     const show = Keyboard.addListener(Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow', () => setKeyboardOpen(true));
     const hide = Keyboard.addListener(Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide', () => setKeyboardOpen(false));
@@ -78,9 +78,8 @@ function ConversationContent({ connectionId, onBack }: { connectionId: string; o
         <Pressable accessibilityRole="button" accessibilityLabel="Back" onPress={onBack} style={chat.back}>
           <Ionicons name="chevron-back" size={25} color={colors.textPrimary} />
         </Pressable>
-        {person?.photoUrl && failedPhoto !== person.photoUrl ? <Image source={{ uri: person.photoUrl }}
-          onError={() => setFailedPhoto(person.photoUrl)} accessibilityLabel={`${name}'s profile photo`} style={chat.avatar} />
-          : <View style={[chat.avatar, chat.initial]}><Text style={chat.initialText}>{name.charAt(0)}</Text></View>}
+        <ProfilePortrait profile={person} accessibilityLabel={`${name}'s profile photo`} style={chat.avatar}
+          fallback={<View style={[chat.avatar, chat.initial]}><Text style={chat.initialText}>{name.charAt(0)}</Text></View>} />
         <View style={chat.identity}><Text style={chat.name} numberOfLines={2}>{connection.isLoading ? 'Conversation' : name}</Text>
           {eligible ? <Text style={chat.subtitle}>Connected on Lérí</Text> : null}</View>
       </View>

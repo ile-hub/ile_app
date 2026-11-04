@@ -136,7 +136,7 @@ function ProfileForm({ profile, onSectionChange, initialSection, routed }: { pro
     <StatusBadge label={dirty ? 'Unsaved changes' : 'Saved account profile'} tone={dirty ? 'highlight' : 'neutral'} />
     {!renter && !routed ? <ProfileVerification verification={profile.verification} /> : null}
     {loadError ? <ErrorState error={loadError} onRetry={reload} /> : null}
-    <Text style={styles.note}>Portrait URLs, bio and prompts are public. Never include identity scans, financial documents or private storage links.</Text>
+    <Text style={styles.note}>Your profile photo, bio and personal prompts are public. Never include identity scans, financial documents or private storage links.</Text>
     {visibleFields.map((field) => <FormInput key={field.key} label={field.label} value={draft[field.key] ?? ''}
       editable={!busy} multiline={field.multiline} maxLength={field.maxLength}
       autoCapitalize={field.key === 'photoUrl' ? 'none' : 'sentences'}
@@ -171,15 +171,15 @@ function ProfileForm({ profile, onSectionChange, initialSection, routed }: { pro
     {previewError ? <ErrorState error={previewError} onRetry={() => void loadPreview()} /> : null}
     {preview ? preview.kind === 'renter' ? <RenterPublicProfileContent profile={preview} label="Saved public preview" />
       : <LandlordPublicProfileContent profile={preview} label="Saved public preview" /> : null}
-    <Button label="Choose a local photo draft" variant="secondary" onPress={() => void chooseLocalPhoto()} />
+    <Button label="Preview a photo on this device" variant="secondary" onPress={() => void chooseLocalPhoto()} />
     {localPhoto ? <><Image source={{ uri: localPhoto }} accessibilityLabel="Local photo draft, not uploaded" style={{ width: 80, height: 80, borderRadius: 40 }} />
-      <Button label="Remove local photo draft" variant="secondary" onPress={() => setLocalPhoto(null)} /></> : null}
-    <Text style={styles.note}>Device photo upload is unavailable in Phase 1. Local photo drafts are not sent when saving; only the public HTTPS portrait URL field is supported.</Text>
+      <Button label="Remove photo preview" variant="secondary" onPress={() => setLocalPhoto(null)} /></> : null}
+    <Text style={styles.note}>Photo uploads are not available yet. This preview stays on your device. To save a portrait, use a public image link above.</Text>
     </> : section === 'about' ? <>
-      <Button label="Choose a local photo draft" variant="secondary" onPress={() => void chooseLocalPhoto()} />
+      <Button label="Preview a photo on this device" variant="secondary" onPress={() => void chooseLocalPhoto()} />
       {localPhoto ? <><Image source={{ uri: localPhoto }} accessibilityLabel="Local photo draft, not uploaded" style={{ width: 80, height: 80, borderRadius: 40 }} />
-        <Button label="Remove local photo draft" variant="secondary" onPress={() => setLocalPhoto(null)} /></> : null}
-      <Text style={styles.note}>Photo drafts stay on this device and are not uploaded. A public portrait link can be saved above.</Text>
+        <Button label="Remove photo preview" variant="secondary" onPress={() => setLocalPhoto(null)} /></> : null}
+      <Text style={styles.note}>This preview stays on your device and is not uploaded. You can save a public image link above.</Text>
     </> : null}
     {base.kind === 'landlord' && !routed ? <ArcsPreferences scope="default" /> : null}
   </View>;

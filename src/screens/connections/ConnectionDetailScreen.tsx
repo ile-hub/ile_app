@@ -98,7 +98,7 @@ function PersonConnectionDetail({ navigation, route }: Props) {
       <Button label="Review later" loading={operation === 'review-later'} variant="secondary" disabled={busy || query.isRefreshing || !!query.error || data.status === 'review_later'} onPress={() => void decide('review-later')} />
     </> : data.senderId === user.id && (data.status === 'pending' || data.status === 'review_later') ? <Text style={styles.body}>Waiting for their decision. Only the recipient can accept or decline.</Text> : null}
     {data.status === 'accepted' ? <>
-      <Text style={styles.heading}>You’re Connected!</Text><Text style={styles.body}>Find this person in Accepted to chat.</Text>
+      <Text style={styles.heading}>You’re Connected! <Text accessibilityRole="image" accessibilityLabel="Handshake">🤝</Text></Text><Text style={styles.body}>Find this person in Accepted to chat.</Text>
     </> : null}
     {error ? <Text accessibilityRole="alert" style={styles.body}>{error.message}</Text> : null}
     {message ? <Text accessibilityLiveRegion="polite" style={styles.body}>{message}</Text> : null}

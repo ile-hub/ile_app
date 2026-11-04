@@ -12,7 +12,7 @@ export function LandlordProfileScreen({ navigation }: Props) {
   return <AccountProfileScreen focused dashboard roleLabel="Landlord" menuItems={[
     { key: 'about', label: 'About me', detail: 'Your introduction, approach and personal story', icon: 'person-outline', onPress: () => navigation.navigate('LandlordAbout') },
     { key: 'business', label: 'Business & registration', detail: 'Your business, experience and private registration details', icon: 'business-outline', onPress: () => navigation.navigate('LandlordBusiness') },
-    { key: 'arcs', label: 'My ARCS preferences', detail: 'Explore priorities and evidence choices · unsaved', icon: 'options-outline', onPress: () => navigation.navigate('LandlordArcs') },
+    { key: 'arcs', label: 'My ARCS preferences', detail: 'Explore optional evidence preferences. Saving is not available yet.', icon: 'options-outline', onPress: () => navigation.navigate('LandlordArcs') },
     { key: 'verification', label: 'Verification status', detail: profile ? `${profile.verification.mode === 'demo' ? 'Demo · ' : ''}Identity: ${profile.verification.identityStatus}` : 'View current verification results', icon: 'shield-checkmark-outline', onPress: () => navigation.navigate('LandlordVerification') },
     { key: 'preview', label: 'Preview my public profile', detail: 'See your saved profile as others see it', icon: 'eye-outline', onPress: () => navigation.navigate('LandlordPreview') },
   ]} />;

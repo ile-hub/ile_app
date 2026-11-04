@@ -39,16 +39,13 @@ function EvidenceDraft({ navigation, route }: Props) {
   return (
     <ScreenContainer>
       <View style={styles.content}>
-        <StatusBadge label="Unsaved draft" tone="highlight" />
-        <Text style={styles.subtitle}>{meta?.description}</Text>
+        <StatusBadge label="Explore evidence options" tone="highlight" />
+        <Text style={styles.subtitle}>{pillar === 'community' ? 'Your community ties and support: universities, clubs, professional networks, volunteering and references.' : meta?.description}</Text>
         <Text style={styles.subtitle}>
-          Choose any options that reflect your circumstances. You can choose several or skip
-          those you cannot provide. A document is optional.
+          Choose the evidence that best reflects your circumstances. You don’t need every type of document.
         </Text>
         <Text style={styles.notice}>
-          The options below are loaded from the server. Evidence saving and uploads are not supported in Phase 1.
-          These choices and your explanation stay on this screen for now. They are not saved
-          to your account or shared, and reset when this screen closes.
+          Saving evidence is not available yet. Your choices stay on this screen and clear when you leave.
         </Text>
         <FormInput label="Your explanation (optional)" multiline maxLength={2000}
           onChangeText={setExplanation} placeholder="Add context in your own words"

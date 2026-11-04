@@ -1,11 +1,13 @@
 import { useAuth } from '../../auth/AuthProvider';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { Image, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 import { Button } from '../../components/Button';
+import { ProfilePortrait } from '../../components/ProfilePortrait';
 import { Card } from '../../components/Card';
 import { ContentStateView, ErrorState, LoadingState } from '../../components/QueryState';
 import { ScreenContainer, screenStyles as styles } from '../../components/ScreenContainer';
 import { StatusBadge, ProfileVerification } from '../../components/StatusBadge';
+import { formatCalendarDate, formatMonthlyBudget } from '../../lib/formatting';
 import { profileSummary } from '../../lib/profiles';
 import { api, ApiError } from '../../lib/api';
 import { TRUST_PILLARS } from '../../lib/trustPillars';
@@ -16,31 +18,30 @@ import type { DiscoverStackParamList } from '../../navigation/DiscoverStack';
 export function RenterPublicProfileContent({ profile, label, onRequest }: {
   profile?: PublicRenterProfile; label?: string; onRequest?: () => void;
 }) {
-  const budget = profile && (profile.budgetMin !== null || profile.budgetMax !== null)
-    ? `£${profile.budgetMin ?? '—'} – £${profile.budgetMax ?? '—'} per month` : 'Not provided';
+  const budget = formatMonthlyBudget(profile?.budgetMin, profile?.budgetMax);
   return <View style={styles.content}>
     {label || !profile ? <StatusBadge label={label ?? 'Layout only · no renter loaded'} tone="highlight" /> : null}
     <Text style={styles.title}>{profileSummary(profile?.displayName) || 'Renter profile'}</Text>
-    {profile?.photoUrl ? <Image source={{ uri: profile.photoUrl }} accessibilityLabel="Public renter portrait" style={{ width: 80, height: 80, borderRadius: 40 }} /> : null}
-    {profile ? <ProfileVerification verification={profile.verification} /> : <StatusBadge label="Verification unavailable" />}
-    <Card><Text style={styles.heading}>About</Text><Text style={styles.body}>{profileSummary(profile?.bio) || 'Not provided.'}</Text></Card>
-    <Card><Text style={styles.heading}>Beyond the paperwork, why would you make a great tenant?</Text><Text style={styles.body}>{profileSummary(profile?.personalStory) || 'Not provided (optional).'}</Text></Card>
-    <Card><View style={styles.content}><Text style={styles.heading}>Tenancy preferences</Text>
+    <ProfilePortrait profile={profile} accessibilityLabel="Public renter portrait" style={{ width: 104, height: 124, borderRadius: 24 }} />
+    {profile ? <Card title="Verification"><ProfileVerification verification={profile.verification} /></Card> : <StatusBadge label="Verification unavailable" />}
+    <Card title="Beyond the paperwork, why would you make a great tenant?"><Text style={styles.body}>{profileSummary(profile?.personalStory) || 'Not provided (optional).'}</Text></Card>
+    <Card title="About"><Text style={styles.body}>{profileSummary(profile?.bio) || 'Not provided.'}</Text></Card>
+    <Card title="Tenancy preferences"><View style={styles.content}>
       <Text style={styles.body}>Preferred area: {profile?.preferredLocation || 'Not provided'}</Text>
       <Text style={styles.body}>Budget: {budget}</Text>
-      <Text style={styles.body}>Move date: {profile?.targetMoveDate || 'Not provided'}</Text>
+      <Text style={styles.body}>Move date: {formatCalendarDate(profile?.targetMoveDate)}</Text>
       <Text style={styles.body}>Duration: {profile?.tenancyLengthMonths ? `${profile.tenancyLengthMonths} months` : 'Not provided'}</Text>
       <Text style={styles.body}>Household size: {profile?.householdSize ?? 'Not provided'}</Text>
       <Text style={styles.body}>Household type: {profile?.householdType ?? 'Not provided'}</Text>
       <Text style={styles.body}>Preferences: {profile?.householdPreferences.map((value) => ({ pet_friendly: 'Pet friendly', smoke_free: 'Smoke free', sharing: 'Sharing' })[value]).join(', ') || 'None stated'}</Text>
     </View></Card>
     <Text style={styles.heading}>ARCS evidence summary</Text>
-    {profile?.evidenceSummary?.map(strand => <Card key={strand.pillar}><View style={styles.content}>
-      <Text style={styles.heading}>{TRUST_PILLARS.find(item => item.id === strand.pillar)?.label}</Text>
+    {!profile?.evidenceSummary?.some(strand => strand.categories.length) ? <Text style={styles.note}>No evidence shared yet. People can demonstrate their circumstances in different ways.</Text> : null}
+    {profile?.evidenceSummary?.filter(strand => strand.categories.length).map(strand => <Card key={strand.pillar} title={TRUST_PILLARS.find(item => item.id === strand.pillar)?.label}><View style={styles.content}>
       <StatusBadge label={strand.status} />
       {strand.categories.map((category, index) => <Text key={`${index}:${category.catalogueId}`} style={styles.body}>{category.label} · {category.status}</Text>)}
     </View></Card>)}
-    <Text style={styles.note}>Only evidence categories and their status are shared. Private documents and explanations stay private.</Text>
+    <Text style={styles.note}>Only evidence types and their status are shared. Private documents and explanations stay private. You do not need every type of evidence; ARCS does not rank or filter people.</Text>
     {label ? null : <>
       <Button disabled={!onRequest} label="Request to Connect" onPress={onRequest} />
       <Text style={styles.note}>Introduce yourself before you connect. A connection is not a tenancy agreement.</Text>

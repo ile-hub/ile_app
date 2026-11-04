@@ -3,7 +3,9 @@ import { colors } from '../theme/colors';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useState } from 'react';
 import {
+  Image,
   KeyboardAvoidingView,
+  Modal,
   Platform,
   Pressable,
   ScrollView,
@@ -30,6 +32,9 @@ export function SignupScreen({ navigation }: Props) {
   const [passwordError, setPasswordError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [termsAccepted, setTermsAccepted] = useState(false);
+  const [showLegal, setShowLegal] = useState(false);
+  const signupDisabled = isSubmitting || !email || !password || !displayName.trim() || !termsAccepted;
 
   function validateEmail(value: string) {
     const nextError = isValidEmail(value) ? null : 'Enter a valid email address.';
@@ -44,7 +49,7 @@ export function SignupScreen({ navigation }: Props) {
     setPasswordError(nextPasswordError);
     setError(null);
 
-    if (!isEmailValid || nextPasswordError || !displayName.trim()) return;
+    if (!isEmailValid || nextPasswordError || !displayName.trim() || !termsAccepted) return;
 
     setIsSubmitting(true);
     const { error: signUpError } = await signUp({ email, password, displayName, role });
@@ -74,14 +79,14 @@ export function SignupScreen({ navigation }: Props) {
           showsVerticalScrollIndicator={false}
         >
           <View style={styles.brand}>
-            <View style={styles.brandMark} />
-            <Text style={styles.brandName}>Lérí</Text>
+            <Image source={require('../../assets/leri-logo.png')} style={styles.brandLogo}
+              resizeMode="contain" accessibilityLabel="Lérí" accessibilityRole="image" />
           </View>
 
           <View style={styles.intro}>
-            <Text style={styles.title}>Renting works better when people vouch for people.</Text>
+            <Text style={styles.title}>Renting works better when trust goes both ways.</Text>
             <Text style={styles.subtitle}>
-              Tell your story and meet people whose tenancy needs align with yours.
+              Tell us who you are, what matters to you and what you’re looking for. We’ll help you discover compatible people.
             </Text>
           </View>
 
@@ -91,7 +96,7 @@ export function SignupScreen({ navigation }: Props) {
               autoComplete="name"
               label="Display name"
               onChangeText={setDisplayName}
-              placeholder="How should we address you?"
+              placeholder="Name"
               returnKeyType="next"
               value={displayName}
             />
@@ -146,16 +151,36 @@ export function SignupScreen({ navigation }: Props) {
               </View>
             </View>
 
+            <View style={styles.termsField}>
+              <Pressable
+                accessibilityRole="checkbox"
+                accessibilityLabel="I agree to the Terms and Conditions"
+                accessibilityState={{ checked: termsAccepted, disabled: isSubmitting }}
+                disabled={isSubmitting}
+                onPress={() => setTermsAccepted((accepted) => !accepted)}
+                style={styles.termsRow}
+              >
+                <View style={[styles.checkbox, termsAccepted && styles.checkboxChecked]}>
+                  {termsAccepted ? <Text style={styles.checkmark}>✓</Text> : null}
+                </View>
+                <Text style={styles.termsText}>I agree to the Terms and Conditions.</Text>
+              </Pressable>
+              <Pressable accessibilityRole="button" onPress={() => setShowLegal(true)} style={styles.termsLink}>
+                <Text style={styles.termsLinkText}>Read terms and privacy notice</Text>
+              </Pressable>
+            </View>
+
             {error ? <Text style={styles.submitError}>{error}</Text> : null}
 
             <Pressable
               accessibilityRole="button"
-              disabled={isSubmitting || !email || !password || !displayName.trim()}
+              disabled={signupDisabled}
+              accessibilityState={{ disabled: signupDisabled, busy: isSubmitting }}
               onPress={handleSignup}
               style={({ pressed }) => [
                 styles.submitButton,
                 pressed && styles.submitButtonPressed,
-                (isSubmitting || !email || !password || !displayName.trim()) &&
+                signupDisabled &&
                   styles.submitButtonDisabled,
               ]}
             >
@@ -165,13 +190,21 @@ export function SignupScreen({ navigation }: Props) {
             </Pressable>
           </View>
 
-          <LegalPreferences />
-
           <Pressable onPress={() => navigation.navigate('Login')} style={styles.loginLink}>
             <Text style={styles.loginText}>I already have a profile</Text>
           </Pressable>
         </ScrollView>
       </KeyboardAvoidingView>
+      <Modal visible={showLegal} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setShowLegal(false)}>
+        <SafeAreaView style={styles.safeArea}>
+          <Pressable accessibilityRole="button" onPress={() => setShowLegal(false)} style={styles.closeLegal}>
+            <Text style={styles.termsLinkText}>Done</Text>
+          </Pressable>
+          <ScrollView contentContainerStyle={styles.legalContent}>
+            <LegalPreferences />
+          </ScrollView>
+        </SafeAreaView>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -186,13 +219,7 @@ const styles = StyleSheet.create({
     paddingBottom: 18,
     paddingTop: 10,
   },
-  brandMark: {
-    backgroundColor: colors.delight,
-    borderRadius: 18,
-    height: 36,
-    width: 36,
-  },
-  brandName: { color: colors.textPrimary, fontSize: 24, fontWeight: '800' },
+  brandLogo: { width: 88, height: 88 },
   intro: { paddingBottom: 22, paddingTop: 18 },
   
   title: {
@@ -216,6 +243,17 @@ const styles = StyleSheet.create({
   roleOptionSelected: { backgroundColor: colors.surface },
   roleText: { color: colors.textMuted, fontSize: 15, fontWeight: '600' },
   roleTextSelected: { color: colors.accent },
+  termsField: { gap: 2 },
+  termsRow: { alignItems: 'center', flexDirection: 'row', gap: 12, minHeight: 44 },
+  checkbox: { alignItems: 'center', justifyContent: 'center', width: 24, height: 24,
+    borderWidth: 2, borderColor: colors.accent, borderRadius: 5, backgroundColor: colors.surface },
+  checkboxChecked: { backgroundColor: colors.accent },
+  checkmark: { color: colors.onAccent, fontSize: 17, fontWeight: '700' },
+  termsText: { color: colors.textPrimary, fontSize: 14, lineHeight: 20, flex: 1 },
+  termsLink: { alignSelf: 'flex-start', justifyContent: 'center', minHeight: 44, paddingLeft: 36 },
+  termsLinkText: { color: colors.accent, fontSize: 14, fontWeight: '600', textDecorationLine: 'underline' },
+  closeLegal: { alignSelf: 'flex-end', paddingHorizontal: 24, paddingVertical: 16 },
+  legalContent: { paddingHorizontal: 24, paddingBottom: 28 },
   submitError: { color: colors.danger, fontSize: 13, textAlign: 'center' },
   submitButton: {
     alignItems: 'center',

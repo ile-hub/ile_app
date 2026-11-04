@@ -23,6 +23,7 @@ export function ConnectedScreen({ navigation, route }: Props) {
   return <ScreenContainer><View style={styles.content}>
     <StatusBadge label="Accepted connection" />
     <Card><View style={styles.content}>
+      <Text accessibilityLabel="Handshake" style={{ fontSize: 32 }}>🤝</Text>
       <Text style={styles.title}>You’re Connected!</Text>
       <Text style={styles.body}>You have both agreed to connect. Your connection is ready for messaging.</Text>
       <Text style={styles.body}>A connection does not guarantee a viewing, property, approval, reservation or tenancy agreement.</Text>

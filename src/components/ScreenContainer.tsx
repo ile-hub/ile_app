@@ -50,7 +50,7 @@ const styles = StyleSheet.create({
 // Shared content typography/layout for the MVP screens.
 export const screenStyles = StyleSheet.create({
   content: { gap: 16 },
-  title: { color: colors.textPrimary, fontSize: 26, fontWeight: '800' },
+  title: { color: colors.textPrimary, fontSize: 30, lineHeight: 36, letterSpacing: -0.6, fontWeight: '800' },
   heading: { color: colors.textPrimary, fontSize: 18, fontWeight: '700', marginTop: 12 },
   body: { color: colors.textSecondary, fontSize: 15, lineHeight: 23 },
   note: { color: colors.textMuted, fontSize: 13, lineHeight: 20 },

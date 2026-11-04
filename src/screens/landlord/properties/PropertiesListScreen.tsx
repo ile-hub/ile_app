@@ -56,7 +56,7 @@ export function PropertiesListScreen({ navigation }: Props) {
             actionLabel="Add a property"
             icon="business-outline"
             onAction={() => navigation.navigate('AddEditProperty', {})}
-            subtitle="Add your first one to start receiving applicants."
+            subtitle="Add a property so we can help you discover compatible renters."
             title="No properties yet"
           />
         )
@@ -75,13 +75,13 @@ export function PropertiesListScreen({ navigation }: Props) {
               <Text numberOfLines={1} style={styles.title}>
                 {propertyName(item)}
               </Text>
-              <View style={[styles.badge, item.status === 'published' && styles.badgeLive]}>
+              {item.status !== 'draft' ? <View style={[styles.badge, item.status === 'published' && styles.badgeLive]}>
                 <Text
                   style={[styles.badgeText, item.status === 'published' && styles.badgeTextLive]}
                 >
                   {STATUS_LABELS[item.status]}
                 </Text>
-              </View>
+              </View> : null}
             </View>
             <Text style={styles.subtitle}>{propertySummaryLine(item)}</Text>
           </Card>

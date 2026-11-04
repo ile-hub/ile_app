@@ -2,6 +2,7 @@ import { colors } from '../theme/colors';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useState } from 'react';
 import {
+  Image,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -66,14 +67,14 @@ export function LoginScreen({ navigation }: Props) {
           showsVerticalScrollIndicator={false}
         >
           <View style={styles.brand}>
-            <View style={styles.brandMark} />
-            <Text style={styles.brandName}>Lérí</Text>
+            <Image source={require('../../assets/leri-logo.png')} style={styles.brandLogo}
+              resizeMode="contain" accessibilityLabel="Lérí" accessibilityRole="image" />
           </View>
 
           <View style={styles.intro}>
-            <Text style={styles.title}>Welcome back</Text>
+            <Text style={styles.title}>Better renting connections start here.</Text>
             <Text style={styles.subtitle}>
-              Meet renters and landlords as people, and find a tenancy that works for you.
+              Discover people who fit what you’re looking for... without the guesswork.
             </Text>
           </View>
 
@@ -128,24 +129,6 @@ export function LoginScreen({ navigation }: Props) {
               <Text style={styles.textAction}>Forgot your password?</Text>
             </Pressable>
 
-            <View style={styles.divider}>
-              <View style={styles.dividerLine} />
-              <Text style={styles.dividerText}>OR</Text>
-              <View style={styles.dividerLine} />
-            </View>
-
-            <Pressable
-              onPress={() => showUnavailable('One-time code login')}
-              style={styles.secondaryButton}
-            >
-              <Text style={styles.secondaryButtonText}>Email me a one-time code</Text>
-            </Pressable>
-            <Pressable
-              onPress={() => showUnavailable('Passkey login')}
-              style={styles.secondaryButton}
-            >
-              <Text style={styles.secondaryButtonText}>Use passkey</Text>
-            </Pressable>
           </View>
 
           <View style={styles.signupRow}>
@@ -169,9 +152,8 @@ const styles = StyleSheet.create({
     gap: 10,
     paddingTop: 22,
   },
-  brandMark: { backgroundColor: colors.delight, borderRadius: 16, height: 32, width: 32 },
-  brandName: { color: colors.textPrimary, fontSize: 20, fontWeight: '800' },
-  intro: { marginTop: 62 },
+  brandLogo: { width: 88, height: 88 },
+  intro: { marginTop: 24 },
   title: { color: colors.textPrimary, fontSize: 34, fontWeight: '800', letterSpacing: -0.8 },
   subtitle: { color: colors.textSecondary, fontSize: 15, lineHeight: 23, marginTop: 12 },
   form: { gap: 16, marginTop: 38 },
@@ -192,19 +174,6 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     textAlign: 'center',
   },
-  divider: { alignItems: 'center', flexDirection: 'row', gap: 12 },
-  dividerLine: { backgroundColor: colors.border, flex: 1, height: 1 },
-  dividerText: { color: colors.textMuted, fontSize: 12, fontWeight: '700' },
-  secondaryButton: {
-    alignItems: 'center',
-    backgroundColor: colors.surface,
-    borderColor: colors.borderStrong,
-    borderRadius: 25,
-    borderWidth: 1,
-    justifyContent: 'center',
-    minHeight: 52,
-  },
-  secondaryButtonText: { color: colors.textPrimary, fontSize: 15, fontWeight: '700' },
   signupRow: {
     alignItems: 'center',
     flexDirection: 'row',

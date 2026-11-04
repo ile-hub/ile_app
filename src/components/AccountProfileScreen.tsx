@@ -1,9 +1,10 @@
 import { profileSummary } from '../lib/profiles';
+import { ProfilePortrait } from './ProfilePortrait';
 import { LegalPreferences } from './LegalPreferences';
 import { useProfile } from '../auth/ProfileProvider';
 import { Ionicons } from '@expo/vector-icons';
 import { useState, type ReactNode } from 'react';
-import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { useAuth } from '../auth/AuthProvider';
 import { colors } from '../theme/colors';
@@ -61,11 +62,11 @@ export function AccountProfileScreen({
       </Pressable> : null}
       {settings && !settingsOnly ? <Text style={styles.name}>Settings</Text> : null}
       {!settingsOnly && (!focused || (!settings && flow === 'overview')) ? <View style={[styles.card, dashboard && styles.dashboardIdentity]}>
-        {profile?.photoUrl ? <Image source={{ uri: profile.photoUrl }} accessibilityLabel="Your profile photo" style={[styles.avatar, dashboard && styles.dashboardAvatar]} /> : <View style={[styles.avatar, dashboard && styles.dashboardAvatar]}>
+        <ProfilePortrait profile={profile} accessibilityLabel="Your profile photo" style={[styles.avatar, dashboard && styles.dashboardAvatar]} fallback={<View style={[styles.avatar, dashboard && styles.dashboardAvatar]}>
           <Text style={styles.avatarInitial}>
             {(displayName ?? user?.email ?? '?').charAt(0).toUpperCase()}
           </Text>
-        </View>}
+        </View>} />
         <Text style={[styles.name, dashboard && styles.dashboardName]}>{displayName ?? 'Your profile'}</Text>
         {!focused && !dashboard ? <Text style={styles.email}>{user?.email}</Text> : null}
         <View style={[styles.roleBadge, dashboard && styles.dashboardRole]}>

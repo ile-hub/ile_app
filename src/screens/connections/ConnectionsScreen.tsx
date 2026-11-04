@@ -1,8 +1,9 @@
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useState } from 'react';
-import { Image, Pressable, Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 import { useAuth } from '../../auth/AuthProvider';
 import { Button } from '../../components/Button';
+import { ProfilePortrait } from '../../components/ProfilePortrait';
 import { Card } from '../../components/Card';
 import { ListScreenContainer } from '../../components/ListScreenContainer';
 import { ContentStateView, ErrorState, LoadingState } from '../../components/QueryState';
@@ -20,7 +21,6 @@ export function ConnectionsScreen({ navigation }: Props) {
   const { user } = useAuth();
   const [section, setSection] = useState<'Incoming' | 'Outgoing' | 'Accepted'>('Incoming');
   const [showExisting, setShowExisting] = useState(false);
-  const [failedPhotos, setFailedPhotos] = useState<string[]>([]);
   const filter = connectionFilter(section);
   const connections = useApiQuery(`connections/${user?.id}/${section}`, () => api.listConnections(filter), {
     cursor: page => page.nextCursor, fetchNext: cursor => api.listConnections(filter, cursor), merge: mergeConnectionPages,
@@ -34,7 +34,7 @@ export function ConnectionsScreen({ navigation }: Props) {
   return <ListScreenContainer<Connection> key={section} data={data} keyExtractor={row => row.id}
     onRefresh={() => { void connections.refresh(); void existing.refresh(); }} refreshing={connections.isRefreshing || existing.isRefreshing}
     ListHeaderComponent={<View style={styles.content}>
-      <Text style={styles.title}>Connections</Text><Text style={styles.body}>A place to get to know each other.</Text>
+      <Text style={styles.title}>Connections</Text><Text style={styles.body}>Your introductions and conversations, all in one place.</Text>
       <View style={{ flexDirection: 'row', backgroundColor: colors.surfaceSage, borderRadius: 24, padding: 4 }}>
         {(['Incoming', 'Outgoing', 'Accepted'] as const).map(label => <Pressable key={label} accessibilityRole="tab"
           accessibilityState={{ selected: section === label }} onPress={() => setSection(label)}
@@ -53,12 +53,10 @@ export function ConnectionsScreen({ navigation }: Props) {
       disabled={!canMessageConnection(item, user?.id)}
       onPress={() => navigation.navigate('Conversation', { connectionId: item.id })}
       style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1, flexDirection: 'row', alignItems: 'center', gap: 14, minHeight: 88, paddingVertical: 18, borderBottomWidth: 1, borderBottomColor: colors.border })}>
-        {item.counterparty?.photoUrl && !failedPhotos.includes(item.counterparty.photoUrl) ? <Image
-          source={{ uri: item.counterparty.photoUrl }} accessibilityLabel="Profile photo"
-          onError={() => { const url = item.counterparty?.photoUrl; if (url) setFailedPhotos(previous => [...previous, url]); }}
-          style={{ width: 48, height: 48, borderRadius: 24 }} />
-          : <View style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: colors.accentMuted, alignItems: 'center', justifyContent: 'center' }}>
-            <Text style={styles.heading}>{(profileSummary(item.counterparty?.displayName) || 'Person').charAt(0)}</Text></View>}
+        <ProfilePortrait profile={item.counterparty} accessibilityLabel="Profile photo"
+          style={{ width: 48, height: 48, borderRadius: 24 }}
+          fallback={<View style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: colors.accentMuted, alignItems: 'center', justifyContent: 'center' }}>
+            <Text style={styles.heading}>{(profileSummary(item.counterparty?.displayName) || 'Person').charAt(0)}</Text></View>} />
         <View style={{ flex: 1, gap: 5 }}><Text style={[styles.heading, { fontSize: 17 }]}>{profileSummary(item.counterparty?.displayName) || 'Connected person'}</Text>
           <Text style={styles.note}>{canMessageConnection(item, user?.id) ? 'Connected · Tap to open conversation' : 'Connected · Conversation unavailable'}</Text></View>
     </Pressable> : <Card style={{ marginTop: 20 }}><View style={styles.content}>

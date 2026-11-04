@@ -11,30 +11,16 @@ type EvidencePreference = 'Accept' | 'Prefer' | 'Not needed';
 // One editor reused for landlord defaults and property overrides; nothing is persisted yet.
 export function ArcsPreferences({ scope }: { scope: 'default' | 'property' }) {
   const catalogue = useEvidenceCatalogue();
-  const [order, setOrder] = useState<TrustPillar[]>(TRUST_PILLARS.map((pillar) => pillar.id));
   const [choices, setChoices] = useState<Record<string, EvidencePreference>>({});
   const [expanded, setExpanded] = useState<TrustPillar | null>(null);
-  function move(index: number, delta: number) {
-    setOrder((current) => {
-      const next = [...current]; const target = index + delta;
-      if (target < 0 || target >= next.length) return current;
-      [next[index], next[target]] = [next[target]!, next[index]!];
-      return next;
-    });
-  }
   return <View style={styles.content}>
-    <Text style={styles.heading}>{scope === 'default' ? 'Default ARCS priorities' : 'Property ARCS priorities'}</Text>
-    <StatusBadge label="Unsaved draft" tone="highlight" />
-    <Text style={styles.body}>Rank 1 is most important; rank 4 is least important. These preferences help you understand evidence, and never exclude or lower someone in discovery.</Text>
+    <Text style={styles.heading}>{scope === 'default' ? 'Default evidence preferences' : 'Property evidence preferences'}</Text>
+    <StatusBadge label="Explore evidence preferences" tone="highlight" />
+    <Text style={styles.body}>Accept means evidence you welcome; Prefer means evidence you would find helpful; Not needed means you do not need it. Missing preferred evidence does not automatically exclude renters. ARCS does not rank or filter people.</Text>
     {catalogue.isLoading ? <LoadingState /> : catalogue.error ? <ErrorState error={catalogue.error} onRetry={catalogue.reload} /> : null}
-    {order.map((id, index) => {
-      const pillar = TRUST_PILLARS.find((item) => item.id === id)!;
-      return <Card key={id}><View style={styles.content}>
-        <Text style={styles.heading}>{index + 1}. {pillar.label}</Text>
-        <View style={styles.row}>
-          <Button label={`Move ${pillar.label} up`} variant="secondary" disabled={index === 0} onPress={() => move(index, -1)} />
-          <Button label={`Move ${pillar.label} down`} variant="secondary" disabled={index === order.length - 1} onPress={() => move(index, 1)} />
-        </View>
+    {TRUST_PILLARS.map((pillar) => {
+      const id = pillar.id;
+      return <Card key={id} title={pillar.label}><View style={styles.content}>
         <Button label={expanded === id ? 'Hide evidence options' : 'Choose evidence preferences'} variant="secondary" onPress={() => setExpanded(expanded === id ? null : id)} />
         {expanded === id ? (catalogue.error ? [] : catalogue.data ?? []).filter((option) => option.pillar === id).map((option) => {
           const key = option.id;
@@ -47,7 +33,7 @@ export function ArcsPreferences({ scope }: { scope: 'default' | 'property' }) {
         }) : null}
       </View></Card>;
     })}
-    <Text style={styles.note}>Options are loaded from the server. Priority order and evidence choices are not supported for saving in Phase 1, and are not saved or applied. They reset when you leave this editor.</Text>
+    <Text style={styles.note}>Saving preferences is not available yet. These choices are not applied and clear when you leave.</Text>
     <Button disabled label="Save ARCS preferences unavailable" />
   </View>;
 }
